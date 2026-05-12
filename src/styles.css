@@ -89,11 +89,11 @@ h2{margin:4px 0 0;font-size:24px;line-height:1.16}
 .chart-card{padding-bottom:12px}
 .hint{margin:-4px 0 12px;color:var(--muted);font-size:13px;line-height:1.5}
 .form-grid{display:grid;gap:12px}
-.form-grid.two{grid-template-columns:1fr 1fr}
+.form-grid.two{grid-template-columns:1fr}
 .field{display:grid;gap:7px}
 .field span{color:#344054;font-size:13px;font-weight:850}
 .field input,.field select{
-  width:100%;min-height:50px;border:1px solid var(--line);border-radius:16px;background:rgba(255,255,255,.9);
+  width:100%;max-width:100%;min-height:48px;border:1px solid var(--line);border-radius:16px;background:rgba(255,255,255,.9);
   padding:11px 13px;color:var(--ink);outline:none;font-size:16px;transition:.16s ease
 }
 .field input:focus,.field select:focus{
@@ -101,7 +101,7 @@ h2{margin:4px 0 0;font-size:24px;line-height:1.16}
 }
 .sticky-preview{
   position:sticky;bottom:calc(76px + env(safe-area-inset-bottom));z-index:12;display:flex;justify-content:space-between;align-items:center;
-  gap:12px;margin-top:18px;padding:12px;background:rgba(255,255,255,.88);border:1px solid rgba(255,255,255,.8);
+  gap:12px;margin-top:18px;padding:10px 12px;background:rgba(255,255,255,.88);border:1px solid rgba(255,255,255,.8);
   border-radius:22px;box-shadow:var(--shadow-strong);backdrop-filter:blur(16px)
 }
 .preview-main{font-size:20px;font-weight:950}
@@ -113,7 +113,7 @@ h2{margin:4px 0 0;font-size:24px;line-height:1.16}
 .primary-button:hover{transform:translateY(-1px)}
 .primary-button:disabled{opacity:.7;transform:none}
 .primary-button.full{width:100%;margin-top:14px;min-height:52px}
-.save-button{min-width:138px}
+.save-button{min-width:120px}
 .range-row{display:flex;gap:8px;overflow-x:auto;padding:2px 0 14px}
 .pill{
   flex:0 0 auto;border:1px solid rgba(255,255,255,.75);border-radius:999px;background:rgba(255,255,255,.76);
@@ -195,6 +195,7 @@ h2{margin:4px 0 0;font-size:24px;line-height:1.16}
 @media (min-width:720px){
   .page{padding:22px 24px 12px}
   .form-grid{grid-template-columns:1fr 1fr}
+  .form-grid.two{grid-template-columns:1fr 1fr}
   .stats-grid{grid-template-columns:repeat(3,1fr)}
   .mobile-card,.record-card{padding:20px}
   .hero-pills.mini{grid-template-columns:1fr 1fr}
@@ -211,3 +212,6 @@ h2{margin:4px 0 0;font-size:24px;line-height:1.16}
   .stat-value{font-size:22px}
   .preview-main{font-size:18px}
 }
+
+
+input[type="date"]{-webkit-appearance:none;appearance:none;line-height:1.2;overflow:hidden}\ninput[type="date"]::-webkit-date-and-time-value{text-align:left}\n
