@@ -18,3 +18,9 @@ npm run dev
 請設定：
 - VITE_SUPABASE_URL
 - VITE_SUPABASE_ANON_KEY
+
+
+## v2 調整
+- 移除場館輸入
+- 統計改顯示服務費 / 總買入
+- 取消依場館統計
