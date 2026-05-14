@@ -48,3 +48,9 @@ npm run dev
 - 驗證碼輸入不再限制 6 碼
 - 支援 Supabase 寄出的 8 碼或其他長度 OTP
 - 文案改為「驗證碼」，避免固定寫 6 位數
+
+
+## v8 安裝提示
+- 偵測 Instagram 內建瀏覽器並提醒用 Safari 開啟
+- Safari 中提示加入主畫面
+- 加入基本 PWA manifest / iOS web app metadata

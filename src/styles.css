@@ -223,3 +223,65 @@ input[type="date"]{-webkit-appearance:none;appearance:none;line-height:1.2;overf
 .login-actions{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}
 .secondary-button{min-height:46px;border:1px solid rgba(15,23,42,.08);background:rgba(255,255,255,.86);color:#344054;border-radius:16px;font-weight:900}
 .login-footnote{margin-top:10px;color:var(--muted);font-size:12px;line-height:1.5}
+
+
+.install-card{
+  position:relative;
+  z-index:18;
+  width:min(960px, calc(100% - 32px));
+  margin:14px auto 0;
+  padding:14px;
+  border-radius:22px;
+  background:linear-gradient(135deg, rgba(15,23,42,.96), rgba(30,64,175,.92));
+  color:#fff;
+  box-shadow:0 16px 40px rgba(15,23,42,.18);
+  border:1px solid rgba(255,255,255,.12);
+}
+.install-card.safari{
+  background:linear-gradient(135deg, rgba(255,255,255,.94), rgba(239,246,255,.92));
+  color:var(--ink);
+  border:1px solid rgba(255,255,255,.9);
+}
+.install-title{
+  font-size:15px;
+  font-weight:950;
+  margin-bottom:4px;
+}
+.install-text{
+  color:#dbeafe;
+  font-size:13px;
+  line-height:1.45;
+}
+.install-card.safari .install-text{
+  color:var(--muted);
+}
+.install-actions{
+  display:flex;
+  gap:8px;
+  margin-top:12px;
+}
+.install-button,.install-close{
+  min-height:40px;
+  border-radius:14px;
+  padding:0 12px;
+  font-weight:900;
+  border:0;
+}
+.install-button{
+  background:#fff;
+  color:#0b1220;
+}
+.install-close{
+  background:rgba(255,255,255,.14);
+  color:#fff;
+  border:1px solid rgba(255,255,255,.18);
+}
+.install-card.safari .install-close{
+  background:#0b1220;
+  color:#fff;
+  border:0;
+}
+@media (max-width:380px){
+  .install-actions{flex-direction:column}
+  .install-button,.install-close{width:100%}
+}

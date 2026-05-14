@@ -135,6 +135,68 @@ function GroupTable({ rows }) {
   return <div className="group-list">{rows.map((row) => <div className="group-row" key={row.label}><div><div className="group-label">{row.label}</div><div className="group-meta">{row.totalGames} 場｜ROI {percent(row.roi)}</div></div><div className={row.netProfit >= 0 ? "profit" : "loss"}>{signedMoney(row.netProfit)}</div></div>)}</div>;
 }
 
+
+function getBrowserContext() {
+  if (typeof navigator === "undefined") return { isInstagram: false, isIOS: false, isSafari: false, isStandalone: false };
+  const ua = navigator.userAgent || "";
+  const isInstagram = /Instagram/i.test(ua);
+  const isIOS = /iPhone|iPad|iPod/i.test(ua);
+  const isSafari = isIOS && /Safari/i.test(ua) && !/CriOS|FxiOS|EdgiOS|Instagram/i.test(ua);
+  const isStandalone = window.matchMedia?.("(display-mode: standalone)")?.matches || window.navigator.standalone === true;
+  return { isInstagram, isIOS, isSafari, isStandalone };
+}
+
+function InstallHint() {
+  const [hidden, setHidden] = useState(() => localStorage.getItem("install_hint_hidden") === "1");
+  const [copied, setCopied] = useState(false);
+  const context = getBrowserContext();
+
+  if (hidden || context.isStandalone) return null;
+  if (!context.isInstagram && !context.isSafari) return null;
+
+  async function copyUrl() {
+    try {
+      await navigator.clipboard.writeText(window.location.origin);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1600);
+    } catch {
+      window.prompt("請複製這個網址到 Safari 開啟", window.location.origin);
+    }
+  }
+
+  function dismiss() {
+    localStorage.setItem("install_hint_hidden", "1");
+    setHidden(true);
+  }
+
+  if (context.isInstagram) {
+    return (
+      <div className="install-card">
+        <div>
+          <div className="install-title">建議用 Safari 開啟</div>
+          <div className="install-text">從 IG 內建瀏覽器使用可能較容易需要重新登入。請點右上角「⋯」→「在瀏覽器開啟」。</div>
+        </div>
+        <div className="install-actions">
+          <button type="button" className="install-button" onClick={copyUrl}>{copied ? "已複製" : "複製網址"}</button>
+          <button type="button" className="install-close" onClick={dismiss}>我知道了</button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="install-card safari">
+      <div>
+        <div className="install-title">加入主畫面，像 App 一樣使用</div>
+        <div className="install-text">點 Safari 下方分享按鈕 →「加入主畫面」→「新增」。之後就能從桌面直接開啟。</div>
+      </div>
+      <div className="install-actions">
+        <button type="button" className="install-close" onClick={dismiss}>我知道了</button>
+      </div>
+    </div>
+  );
+}
+
 function LoginPage() {
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
@@ -336,5 +398,5 @@ export default function App() {
   if (loading && !session) return <div className="center-screen">載入中...</div>;
   if (!session) return <LoginPage />;
 
-  return <div className="app-shell"><div className="bg-orb orb-a" /><div className="bg-orb orb-b" /><header className="app-header"><div><div className="app-kicker">Cloud Version</div><h1>限時錦標賽記帳</h1></div><div className={monthSummary.netProfit >= 0 ? "header-profit profit" : "header-profit loss"}>本月 {signedMoney(monthSummary.netProfit)}</div></header>{loading ? <div className="center-screen">同步資料中...</div> : null}{!loading && tab === "add" ? <AddPage form={form} setForm={setForm} saveRecord={saveRecord} saving={saving} monthSummary={monthSummary} /> : null}{!loading && tab === "stats" ? <StatsPage records={records} /> : null}{!loading && tab === "records" ? <RecordsPage records={records} removeRecord={removeRecord} /> : null}{!loading && tab === "data" ? <DataPage records={records} signOut={signOut} /> : null}<nav className="bottom-nav"><button className={tab === "add" ? "active" : ""} onClick={() => setTab("add")}>＋<span>新增</span></button><button className={tab === "stats" ? "active" : ""} onClick={() => setTab("stats")}>▦<span>統計</span></button><button className={tab === "records" ? "active" : ""} onClick={() => setTab("records")}>≡<span>紀錄</span></button><button className={tab === "data" ? "active" : ""} onClick={() => setTab("data")}>⇅<span>資料</span></button></nav><Toast message={toast} /></div>;
+  return <div className="app-shell"><div className="bg-orb orb-a" /><div className="bg-orb orb-b" /><header className="app-header"><div><div className="app-kicker">Cloud Version</div><h1>限時錦標賽記帳</h1></div><div className={monthSummary.netProfit >= 0 ? "header-profit profit" : "header-profit loss"}>本月 {signedMoney(monthSummary.netProfit)}</div></header><InstallHint />{loading ? <div className="center-screen">同步資料中...</div> : null}{!loading && tab === "add" ? <AddPage form={form} setForm={setForm} saveRecord={saveRecord} saving={saving} monthSummary={monthSummary} /> : null}{!loading && tab === "stats" ? <StatsPage records={records} /> : null}{!loading && tab === "records" ? <RecordsPage records={records} removeRecord={removeRecord} /> : null}{!loading && tab === "data" ? <DataPage records={records} signOut={signOut} /> : null}<nav className="bottom-nav"><button className={tab === "add" ? "active" : ""} onClick={() => setTab("add")}>＋<span>新增</span></button><button className={tab === "stats" ? "active" : ""} onClick={() => setTab("stats")}>▦<span>統計</span></button><button className={tab === "records" ? "active" : ""} onClick={() => setTab("records")}>≡<span>紀錄</span></button><button className={tab === "data" ? "active" : ""} onClick={() => setTab("data")}>⇅<span>資料</span></button></nav><Toast message={toast} /></div>;
 }
