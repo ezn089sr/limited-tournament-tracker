@@ -219,3 +219,7 @@ input[type="date"]{-webkit-appearance:none;appearance:none;line-height:1.2;overf
 .stat-card.dark .muted-inline{color:#cbd5e1}
 .field select{appearance:none;-webkit-appearance:none;background-image:linear-gradient(45deg,transparent 50%,#667085 50%),linear-gradient(135deg,#667085 50%,transparent 50%);background-position:calc(100% - 24px) calc(50% - 3px),calc(100% - 16px) calc(50% - 3px);background-size:8px 8px,8px 8px;background-repeat:no-repeat;padding-right:42px}
 .field input[type="date"]{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 24 24' fill='none' stroke='%23667085' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='4' width='18' height='18' rx='2' ry='2'/%3E%3Cline x1='16' y1='2' x2='16' y2='6'/%3E%3Cline x1='8' y1='2' x2='8' y2='6'/%3E%3Cline x1='3' y1='10' x2='21' y2='10'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 14px center;padding-right:44px}
+
+.login-actions{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}
+.secondary-button{min-height:46px;border:1px solid rgba(15,23,42,.08);background:rgba(255,255,255,.86);color:#344054;border-radius:16px;font-weight:900}
+.login-footnote{margin-top:10px;color:var(--muted);font-size:12px;line-height:1.5}

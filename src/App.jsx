@@ -137,20 +137,61 @@ function GroupTable({ rows }) {
 
 function LoginPage() {
   const [email, setEmail] = useState("");
+  const [code, setCode] = useState("");
   const [sending, setSending] = useState(false);
-  async function signIn() {
+  const [verifying, setVerifying] = useState(false);
+  const [step, setStep] = useState("request");
+
+  async function requestCode() {
     try {
       setSending(true);
-      const { error } = await supabase.auth.signInWithOtp({ email, options: { emailRedirectTo: window.location.origin } });
+      const { error } = await supabase.auth.signInWithOtp({
+        email,
+        options: { shouldCreateUser: true }
+      });
       if (error) throw error;
-      alert("登入連結已寄出，請到信箱點 magic link。");
+      setStep("verify");
+      alert("驗證碼已寄出，請到信箱查看 6 位數代碼。");
     } catch (error) {
       alert(error.message || "寄送失敗");
     } finally {
       setSending(false);
     }
   }
-  return <main className="login-wrap"><div className="login-glow" /><div className="login-card"><div className="app-kicker">Cloud Version</div><h1>限時錦標賽記帳</h1><p className="login-text">首次用 Email 登入一次即可，之後通常會自動保持登入。資料會儲存在雲端。</p><Input label="Email" type="email" value={email} onChange={setEmail} placeholder="you@example.com" /><button className="primary-button full" type="button" onClick={signIn} disabled={sending || !email}>{sending ? "寄送中..." : "寄送登入連結"}</button></div></main>;
+
+  async function verifyCode() {
+    try {
+      setVerifying(true);
+      const { error } = await supabase.auth.verifyOtp({
+        email,
+        token: code,
+        type: "email"
+      });
+      if (error) throw error;
+    } catch (error) {
+      alert(error.message || "驗證失敗");
+    } finally {
+      setVerifying(false);
+    }
+  }
+
+  async function resendCode() {
+    try {
+      setSending(true);
+      const { error } = await supabase.auth.resend({
+        type: "signup",
+        email,
+      });
+      if (error) throw error;
+      alert("已重新寄出驗證碼。");
+    } catch (error) {
+      alert(error.message || "重寄失敗");
+    } finally {
+      setSending(false);
+    }
+  }
+
+  return <main className="login-wrap"><div className="login-glow" /><div className="login-card"><div className="app-kicker">Cloud Version</div><h1>限時錦標賽記帳</h1><p className="login-text">改成 Email 驗證碼登入。第一次寄送驗證碼，之後通常會維持登入，不用每次收信點連結。</p><Input label="Email" type="email" value={email} onChange={setEmail} placeholder="you@example.com" />{step === "verify" ? <><Input label="6 位數驗證碼" type="text" value={code} onChange={(v) => setCode(v.replace(/\D/g, "").slice(0, 6))} placeholder="請輸入 6 位數" /><div className="login-actions"><button className="secondary-button" type="button" onClick={() => setStep("request")}>修改信箱</button><button className="secondary-button" type="button" onClick={resendCode} disabled={sending}>重寄驗證碼</button></div><button className="primary-button full" type="button" onClick={verifyCode} disabled={verifying || code.length !== 6}>{verifying ? "驗證中..." : "登入"}</button></> : <button className="primary-button full" type="button" onClick={requestCode} disabled={sending || !email}>{sending ? "寄送中..." : "寄送驗證碼"}</button>}<div className="login-footnote">若你在 Supabase 仍收到登入連結，請把 Email 範本改成驗證碼模式。</div></div></main>;
 }
 
 function AddPage({ form, setForm, saveRecord, saving, monthSummary }) {

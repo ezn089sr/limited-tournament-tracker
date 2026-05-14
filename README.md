@@ -37,3 +37,8 @@ npm run dev
 - 日期與下拉欄位增加可操作感（圖示 / 邊框 / 狀態）
 - 統計卡片更新為「總買入（含服務費）」
 - 登入頁文案改為強調首次登入後通常會維持登入
+
+## v6 OTP 登入
+- 登入由 Email Magic Link 改為 Email OTP 驗證碼流程
+- 前端使用 signInWithOtp + verifyOtp
+- 若仍收到登入連結，需到 Supabase Email template 將 Magic Link 改成 Token 驗證碼模式
