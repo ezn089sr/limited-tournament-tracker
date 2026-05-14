@@ -151,7 +151,7 @@ function LoginPage() {
       });
       if (error) throw error;
       setStep("verify");
-      alert("驗證碼已寄出，請到信箱查看 6 位數代碼。");
+      alert("驗證碼已寄出，請到信箱查看代碼。");
     } catch (error) {
       alert(error.message || "寄送失敗");
     } finally {
@@ -191,7 +191,7 @@ function LoginPage() {
     }
   }
 
-  return <main className="login-wrap"><div className="login-glow" /><div className="login-card"><div className="app-kicker">Cloud Version</div><h1>限時錦標賽記帳</h1><p className="login-text">改成 Email 驗證碼登入。第一次寄送驗證碼，之後通常會維持登入，不用每次收信點連結。</p><Input label="Email" type="email" value={email} onChange={setEmail} placeholder="you@example.com" />{step === "verify" ? <><Input label="6 位數驗證碼" type="text" value={code} onChange={(v) => setCode(v.replace(/\D/g, "").slice(0, 6))} placeholder="請輸入 6 位數" /><div className="login-actions"><button className="secondary-button" type="button" onClick={() => setStep("request")}>修改信箱</button><button className="secondary-button" type="button" onClick={resendCode} disabled={sending}>重寄驗證碼</button></div><button className="primary-button full" type="button" onClick={verifyCode} disabled={verifying || code.length !== 6}>{verifying ? "驗證中..." : "登入"}</button></> : <button className="primary-button full" type="button" onClick={requestCode} disabled={sending || !email}>{sending ? "寄送中..." : "寄送驗證碼"}</button>}<div className="login-footnote">若你在 Supabase 仍收到登入連結，請把 Email 範本改成驗證碼模式。</div></div></main>;
+  return <main className="login-wrap"><div className="login-glow" /><div className="login-card"><div className="app-kicker">Cloud Version</div><h1>限時錦標賽記帳</h1><p className="login-text">使用 Email 驗證碼登入。第一次寄送驗證碼，之後通常會維持登入，不用每次收信點連結。</p><Input label="Email" type="email" value={email} onChange={setEmail} placeholder="you@example.com" />{step === "verify" ? <><Input label="驗證碼" type="text" value={code} onChange={(v) => setCode(v.replace(/\D/g, "").slice(0, 12))} placeholder="請輸入信箱中的驗證碼" /><div className="login-actions"><button className="secondary-button" type="button" onClick={() => setStep("request")}>修改信箱</button><button className="secondary-button" type="button" onClick={resendCode} disabled={sending}>重寄驗證碼</button></div><button className="primary-button full" type="button" onClick={verifyCode} disabled={verifying || code.length < 6}>{verifying ? "驗證中..." : "登入"}</button></> : <button className="primary-button full" type="button" onClick={requestCode} disabled={sending || !email}>{sending ? "寄送中..." : "寄送驗證碼"}</button>}<div className="login-footnote">若你在 Supabase 仍收到登入連結，請把 Email 範本改成驗證碼模式。</div></div></main>;
 }
 
 function AddPage({ form, setForm, saveRecord, saving, monthSummary }) {

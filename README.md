@@ -42,3 +42,9 @@ npm run dev
 - 登入由 Email Magic Link 改為 Email OTP 驗證碼流程
 - 前端使用 signInWithOtp + verifyOtp
 - 若仍收到登入連結，需到 Supabase Email template 將 Magic Link 改成 Token 驗證碼模式
+
+
+## v7 OTP 修正
+- 驗證碼輸入不再限制 6 碼
+- 支援 Supabase 寄出的 8 碼或其他長度 OTP
+- 文案改為「驗證碼」，避免固定寫 6 位數
