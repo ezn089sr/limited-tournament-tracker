@@ -396,3 +396,39 @@ input[type="date"]{-webkit-appearance:none;appearance:none;line-height:1.2;overf
 .text-button.dark-text{
   color:var(--muted);
 }
+
+
+.auth-tabs{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:8px;
+  margin:16px 0 14px;
+  padding:5px;
+  border-radius:18px;
+  background:#f2f4f7;
+}
+.auth-tabs button{
+  min-height:42px;
+  border:0;
+  border-radius:14px;
+  background:transparent;
+  color:var(--muted);
+  font-weight:950;
+}
+.auth-tabs button.active{
+  background:#fff;
+  color:var(--ink);
+  box-shadow:0 8px 20px rgba(16,24,40,.08);
+}
+.login-note{
+  margin-top:12px;
+  padding:12px;
+  border-radius:16px;
+  background:#f8fafc;
+  color:var(--muted);
+  font-size:13px;
+  line-height:1.5;
+}
+.login-card .field + .field{
+  margin-top:12px;
+}

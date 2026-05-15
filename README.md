@@ -61,3 +61,10 @@ npm run dev
 - Safari 非主畫面模式會先顯示加入主畫面教學
 - 從主畫面開啟後才進入登入流程
 - 保留「我先直接使用」給測試或例外情境
+
+
+## v10 Email + 密碼登入版
+- 移除 OTP 驗證碼登入，避免 Supabase 內建寄信限制
+- 改成 Email + 密碼登入 / 建立帳號
+- 建議在 Supabase 關閉 Confirm email，讓註冊不需要驗證信
+- 忘記密碼功能仍會寄信，未設定 Custom SMTP 時可能受限制

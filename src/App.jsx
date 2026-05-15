@@ -227,7 +227,7 @@ function OnboardingGate({ onContinue }) {
             <div><strong>1</strong><span>點右上角「⋯」</span></div>
             <div><strong>2</strong><span>選擇「在瀏覽器開啟」</span></div>
             <div><strong>3</strong><span>在 Safari 加入主畫面</span></div>
-            <div><strong>4</strong><span>從桌面圖示打開後再登入</span></div>
+            <div><strong>4</strong><span>從桌面圖示打開後建立帳號</span></div>
           </div>
           <button className="primary-button full" type="button" onClick={copyUrl}>{copied ? "網址已複製" : "複製網址"}</button>
           <button className="text-button" type="button" onClick={continueAnyway}>我先直接使用</button>
@@ -242,12 +242,12 @@ function OnboardingGate({ onContinue }) {
         <div className="onboarding-card">
           <div className="onboarding-badge light">建議先加入主畫面</div>
           <h1>像 App 一樣使用</h1>
-          <p>請先把工具加入 iPhone 主畫面。之後從桌面圖示開啟，再登入一次即可長期使用。</p>
+          <p>請先把工具加入 iPhone 主畫面。之後從桌面圖示開啟，再建立帳號或登入即可長期使用。</p>
           <div className="onboarding-steps light">
             <div><strong>1</strong><span>點 Safari 下方分享按鈕</span></div>
             <div><strong>2</strong><span>選擇「加入主畫面」</span></div>
             <div><strong>3</strong><span>按「新增」</span></div>
-            <div><strong>4</strong><span>從桌面圖示打開後登入</span></div>
+            <div><strong>4</strong><span>從桌面圖示打開後建立帳號</span></div>
           </div>
           <button className="primary-button full" type="button" onClick={continueAnyway}>我已加入主畫面，繼續登入</button>
           <button className="text-button dark-text" type="button" onClick={continueAnyway}>我先直接使用</button>
@@ -261,62 +261,107 @@ function OnboardingGate({ onContinue }) {
 
 
 function LoginPage() {
+  const [mode, setMode] = useState("signin");
   const [email, setEmail] = useState("");
-  const [code, setCode] = useState("");
-  const [sending, setSending] = useState(false);
-  const [verifying, setVerifying] = useState(false);
-  const [step, setStep] = useState("request");
+  const [password, setPassword] = useState("");
+  const [working, setWorking] = useState(false);
 
-  async function requestCode() {
+  const isSignup = mode === "signup";
+
+  async function handleAuth() {
+    if (!email || !password) {
+      alert("請輸入 Email 和密碼");
+      return;
+    }
+    if (password.length < 6) {
+      alert("密碼至少需要 6 個字元");
+      return;
+    }
+
     try {
-      setSending(true);
-      const { error } = await supabase.auth.signInWithOtp({
-        email,
-        options: { shouldCreateUser: true }
+      setWorking(true);
+
+      if (isSignup) {
+        const { error } = await supabase.auth.signUp({
+          email,
+          password,
+        });
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
+        if (error) throw error;
+      }
+    } catch (error) {
+      const message = String(error.message || "");
+      if (message.includes("Invalid login credentials")) {
+        alert("Email 或密碼錯誤。如果你還沒有帳號，請切換到建立帳號。");
+      } else if (message.includes("User already registered")) {
+        alert("這個 Email 已經註冊過，請切換到登入。");
+      } else {
+        alert(error.message || "操作失敗");
+      }
+    } finally {
+      setWorking(false);
+    }
+  }
+
+  async function resetPassword() {
+    if (!email) {
+      alert("請先輸入 Email");
+      return;
+    }
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: window.location.origin,
       });
       if (error) throw error;
-      setStep("verify");
-      alert("驗證碼已寄出，請到信箱查看代碼。");
+      alert("密碼重設信已寄出。注意：如果尚未設定 SMTP，可能會受 Supabase 寄信限制影響。");
     } catch (error) {
       alert(error.message || "寄送失敗");
-    } finally {
-      setSending(false);
     }
   }
 
-  async function verifyCode() {
-    try {
-      setVerifying(true);
-      const { error } = await supabase.auth.verifyOtp({
-        email,
-        token: code,
-        type: "email"
-      });
-      if (error) throw error;
-    } catch (error) {
-      alert(error.message || "驗證失敗");
-    } finally {
-      setVerifying(false);
-    }
-  }
+  return (
+    <main className="login-wrap">
+      <div className="login-glow" />
+      <div className="login-card">
+        <div className="app-kicker">Cloud Version</div>
+        <h1>限時錦標賽記帳</h1>
+        <p className="login-text">
+          使用 Email + 密碼建立帳號。資料會存在雲端，不用每次收驗證信。
+        </p>
 
-  async function resendCode() {
-    try {
-      setSending(true);
-      const { error } = await supabase.auth.resend({
-        type: "signup",
-        email,
-      });
-      if (error) throw error;
-      alert("已重新寄出驗證碼。");
-    } catch (error) {
-      alert(error.message || "重寄失敗");
-    } finally {
-      setSending(false);
-    }
-  }
+        <div className="auth-tabs">
+          <button type="button" className={mode === "signin" ? "active" : ""} onClick={() => setMode("signin")}>
+            登入
+          </button>
+          <button type="button" className={mode === "signup" ? "active" : ""} onClick={() => setMode("signup")}>
+            建立帳號
+          </button>
+        </div>
 
-  return <main className="login-wrap"><div className="login-glow" /><div className="login-card"><div className="app-kicker">Cloud Version</div><h1>限時錦標賽記帳</h1><p className="login-text">使用 Email 驗證碼登入。建議從 iPhone 主畫面開啟後再登入，之後通常會維持登入。</p><Input label="Email" type="email" value={email} onChange={setEmail} placeholder="you@example.com" />{step === "verify" ? <><Input label="驗證碼" type="text" value={code} onChange={(v) => setCode(v.replace(/\D/g, "").slice(0, 12))} placeholder="請輸入信箱中的驗證碼" /><div className="login-actions"><button className="secondary-button" type="button" onClick={() => setStep("request")}>修改信箱</button><button className="secondary-button" type="button" onClick={resendCode} disabled={sending}>重寄驗證碼</button></div><button className="primary-button full" type="button" onClick={verifyCode} disabled={verifying || code.length < 6}>{verifying ? "驗證中..." : "登入"}</button></> : <button className="primary-button full" type="button" onClick={requestCode} disabled={sending || !email}>{sending ? "寄送中..." : "寄送驗證碼"}</button>}<div className="login-footnote">若你在 Supabase 仍收到登入連結，請把 Email 範本改成驗證碼模式。</div></div></main>;
+        <Input label="Email" type="email" value={email} onChange={setEmail} placeholder="you@example.com" />
+        <Input label="密碼" type="password" value={password} onChange={setPassword} placeholder="至少 6 個字元" />
+
+        <button className="primary-button full" type="button" onClick={handleAuth} disabled={working || !email || !password}>
+          {working ? "處理中..." : isSignup ? "建立帳號並開始使用" : "登入"}
+        </button>
+
+        {!isSignup ? (
+          <button className="text-button dark-text" type="button" onClick={resetPassword}>
+            忘記密碼？
+          </button>
+        ) : (
+          <div className="login-note">
+            建立帳號後，之後可以用同一組 Email + 密碼在其他裝置登入。
+          </div>
+        )}
+      </div>
+    </main>
+  );
 }
 
 function AddPage({ form, setForm, saveRecord, saving, monthSummary }) {
