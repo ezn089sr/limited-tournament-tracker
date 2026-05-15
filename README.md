@@ -54,3 +54,10 @@ npm run dev
 - 偵測 Instagram 內建瀏覽器並提醒用 Safari 開啟
 - Safari 中提示加入主畫面
 - 加入基本 PWA manifest / iOS web app metadata
+
+
+## v9 Onboarding 修正
+- IG 內建瀏覽器會在登入前先顯示 Safari 開啟教學
+- Safari 非主畫面模式會先顯示加入主畫面教學
+- 從主畫面開啟後才進入登入流程
+- 保留「我先直接使用」給測試或例外情境

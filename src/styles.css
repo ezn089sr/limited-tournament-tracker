@@ -285,3 +285,114 @@ input[type="date"]{-webkit-appearance:none;appearance:none;line-height:1.2;overf
   .install-actions{flex-direction:column}
   .install-button,.install-close{width:100%}
 }
+
+
+.onboarding-wrap{
+  min-height:100vh;
+  display:grid;
+  place-items:center;
+  padding:22px;
+  position:relative;
+  overflow:hidden;
+}
+.onboarding-wrap::before{
+  content:"";
+  position:absolute;
+  width:360px;
+  height:360px;
+  border-radius:999px;
+  background:radial-gradient(circle, rgba(37,99,235,.18), transparent 64%);
+  top:-80px;
+  right:-120px;
+}
+.onboarding-card{
+  position:relative;
+  z-index:1;
+  width:min(480px,100%);
+  border-radius:30px;
+  padding:24px;
+  background:rgba(255,255,255,.9);
+  border:1px solid rgba(255,255,255,.9);
+  box-shadow:var(--shadow-strong);
+  backdrop-filter:blur(18px);
+}
+.onboarding-card.dark{
+  background:linear-gradient(135deg, rgba(11,18,32,.98), rgba(30,64,175,.95));
+  color:#fff;
+  border-color:rgba(255,255,255,.12);
+}
+.onboarding-badge{
+  display:inline-flex;
+  border-radius:999px;
+  background:rgba(255,255,255,.12);
+  color:#dbeafe;
+  padding:7px 10px;
+  font-size:12px;
+  font-weight:950;
+  margin-bottom:10px;
+}
+.onboarding-badge.light{
+  background:#eef2ff;
+  color:#3746a6;
+}
+.onboarding-card h1{
+  margin:4px 0 10px;
+  font-size:30px;
+  letter-spacing:-.04em;
+}
+.onboarding-card p{
+  margin:0;
+  color:#dbeafe;
+  line-height:1.6;
+}
+.onboarding-card:not(.dark) p{
+  color:var(--muted);
+}
+.onboarding-steps{
+  display:grid;
+  gap:10px;
+  margin:18px 0;
+}
+.onboarding-steps div{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  border-radius:18px;
+  padding:12px;
+  background:rgba(255,255,255,.1);
+}
+.onboarding-steps.light div{
+  background:#f5f7fb;
+}
+.onboarding-steps strong{
+  flex:0 0 auto;
+  width:28px;
+  height:28px;
+  border-radius:999px;
+  display:grid;
+  place-items:center;
+  background:#fff;
+  color:#0b1220;
+  font-size:13px;
+  font-weight:950;
+}
+.onboarding-steps.light strong{
+  background:#0b1220;
+  color:#fff;
+}
+.onboarding-steps span{
+  font-size:14px;
+  font-weight:850;
+}
+.text-button{
+  width:100%;
+  min-height:44px;
+  border:0;
+  background:transparent;
+  color:#dbeafe;
+  font-weight:900;
+  margin-top:8px;
+}
+.text-button.dark-text{
+  color:var(--muted);
+}

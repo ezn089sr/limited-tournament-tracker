@@ -197,6 +197,69 @@ function InstallHint() {
   );
 }
 
+function OnboardingGate({ onContinue }) {
+  const context = getBrowserContext();
+  const [copied, setCopied] = useState(false);
+
+  async function copyUrl() {
+    try {
+      await navigator.clipboard.writeText(window.location.origin);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1600);
+    } catch {
+      window.prompt("請複製這個網址到 Safari 開啟", window.location.origin);
+    }
+  }
+
+  function continueAnyway() {
+    localStorage.setItem("onboarding_skip", "1");
+    onContinue();
+  }
+
+  if (context.isInstagram) {
+    return (
+      <main className="onboarding-wrap">
+        <div className="onboarding-card dark">
+          <div className="onboarding-badge">建議先不要登入</div>
+          <h1>請先用 Safari 開啟</h1>
+          <p>這個工具適合長期記錄。如果在 Instagram 內建瀏覽器登入，之後切到 Safari 或主畫面時可能會需要重新驗證。</p>
+          <div className="onboarding-steps">
+            <div><strong>1</strong><span>點右上角「⋯」</span></div>
+            <div><strong>2</strong><span>選擇「在瀏覽器開啟」</span></div>
+            <div><strong>3</strong><span>在 Safari 加入主畫面</span></div>
+            <div><strong>4</strong><span>從桌面圖示打開後再登入</span></div>
+          </div>
+          <button className="primary-button full" type="button" onClick={copyUrl}>{copied ? "網址已複製" : "複製網址"}</button>
+          <button className="text-button" type="button" onClick={continueAnyway}>我先直接使用</button>
+        </div>
+      </main>
+    );
+  }
+
+  if (context.isIOS && context.isSafari && !context.isStandalone) {
+    return (
+      <main className="onboarding-wrap">
+        <div className="onboarding-card">
+          <div className="onboarding-badge light">建議先加入主畫面</div>
+          <h1>像 App 一樣使用</h1>
+          <p>請先把工具加入 iPhone 主畫面。之後從桌面圖示開啟，再登入一次即可長期使用。</p>
+          <div className="onboarding-steps light">
+            <div><strong>1</strong><span>點 Safari 下方分享按鈕</span></div>
+            <div><strong>2</strong><span>選擇「加入主畫面」</span></div>
+            <div><strong>3</strong><span>按「新增」</span></div>
+            <div><strong>4</strong><span>從桌面圖示打開後登入</span></div>
+          </div>
+          <button className="primary-button full" type="button" onClick={continueAnyway}>我已加入主畫面，繼續登入</button>
+          <button className="text-button dark-text" type="button" onClick={continueAnyway}>我先直接使用</button>
+        </div>
+      </main>
+    );
+  }
+
+  return null;
+}
+
+
 function LoginPage() {
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
@@ -253,7 +316,7 @@ function LoginPage() {
     }
   }
 
-  return <main className="login-wrap"><div className="login-glow" /><div className="login-card"><div className="app-kicker">Cloud Version</div><h1>限時錦標賽記帳</h1><p className="login-text">使用 Email 驗證碼登入。第一次寄送驗證碼，之後通常會維持登入，不用每次收信點連結。</p><Input label="Email" type="email" value={email} onChange={setEmail} placeholder="you@example.com" />{step === "verify" ? <><Input label="驗證碼" type="text" value={code} onChange={(v) => setCode(v.replace(/\D/g, "").slice(0, 12))} placeholder="請輸入信箱中的驗證碼" /><div className="login-actions"><button className="secondary-button" type="button" onClick={() => setStep("request")}>修改信箱</button><button className="secondary-button" type="button" onClick={resendCode} disabled={sending}>重寄驗證碼</button></div><button className="primary-button full" type="button" onClick={verifyCode} disabled={verifying || code.length < 6}>{verifying ? "驗證中..." : "登入"}</button></> : <button className="primary-button full" type="button" onClick={requestCode} disabled={sending || !email}>{sending ? "寄送中..." : "寄送驗證碼"}</button>}<div className="login-footnote">若你在 Supabase 仍收到登入連結，請把 Email 範本改成驗證碼模式。</div></div></main>;
+  return <main className="login-wrap"><div className="login-glow" /><div className="login-card"><div className="app-kicker">Cloud Version</div><h1>限時錦標賽記帳</h1><p className="login-text">使用 Email 驗證碼登入。建議從 iPhone 主畫面開啟後再登入，之後通常會維持登入。</p><Input label="Email" type="email" value={email} onChange={setEmail} placeholder="you@example.com" />{step === "verify" ? <><Input label="驗證碼" type="text" value={code} onChange={(v) => setCode(v.replace(/\D/g, "").slice(0, 12))} placeholder="請輸入信箱中的驗證碼" /><div className="login-actions"><button className="secondary-button" type="button" onClick={() => setStep("request")}>修改信箱</button><button className="secondary-button" type="button" onClick={resendCode} disabled={sending}>重寄驗證碼</button></div><button className="primary-button full" type="button" onClick={verifyCode} disabled={verifying || code.length < 6}>{verifying ? "驗證中..." : "登入"}</button></> : <button className="primary-button full" type="button" onClick={requestCode} disabled={sending || !email}>{sending ? "寄送中..." : "寄送驗證碼"}</button>}<div className="login-footnote">若你在 Supabase 仍收到登入連結，請把 Email 範本改成驗證碼模式。</div></div></main>;
 }
 
 function AddPage({ form, setForm, saveRecord, saving, monthSummary }) {
@@ -396,7 +459,15 @@ export default function App() {
   const monthSummary = useMemo(() => sumRecords(monthRecords), [monthRecords]);
 
   if (loading && !session) return <div className="center-screen">載入中...</div>;
-  if (!session) return <LoginPage />;
+  if (!session) {
+    const context = getBrowserContext();
+    const skipped = localStorage.getItem("onboarding_skip") === "1";
+    const shouldShowOnboarding = !skipped && (context.isInstagram || (context.isIOS && context.isSafari && !context.isStandalone));
+    if (shouldShowOnboarding) {
+      return <OnboardingGate onContinue={() => setToast("可以先登入，之後建議從主畫面使用")} />;
+    }
+    return <LoginPage />;
+  }
 
-  return <div className="app-shell"><div className="bg-orb orb-a" /><div className="bg-orb orb-b" /><header className="app-header"><div><div className="app-kicker">Cloud Version</div><h1>限時錦標賽記帳</h1></div><div className={monthSummary.netProfit >= 0 ? "header-profit profit" : "header-profit loss"}>本月 {signedMoney(monthSummary.netProfit)}</div></header><InstallHint />{loading ? <div className="center-screen">同步資料中...</div> : null}{!loading && tab === "add" ? <AddPage form={form} setForm={setForm} saveRecord={saveRecord} saving={saving} monthSummary={monthSummary} /> : null}{!loading && tab === "stats" ? <StatsPage records={records} /> : null}{!loading && tab === "records" ? <RecordsPage records={records} removeRecord={removeRecord} /> : null}{!loading && tab === "data" ? <DataPage records={records} signOut={signOut} /> : null}<nav className="bottom-nav"><button className={tab === "add" ? "active" : ""} onClick={() => setTab("add")}>＋<span>新增</span></button><button className={tab === "stats" ? "active" : ""} onClick={() => setTab("stats")}>▦<span>統計</span></button><button className={tab === "records" ? "active" : ""} onClick={() => setTab("records")}>≡<span>紀錄</span></button><button className={tab === "data" ? "active" : ""} onClick={() => setTab("data")}>⇅<span>資料</span></button></nav><Toast message={toast} /></div>;
+  return <div className="app-shell"><div className="bg-orb orb-a" /><div className="bg-orb orb-b" /><header className="app-header"><div><div className="app-kicker">Cloud Version</div><h1>限時錦標賽記帳</h1></div><div className={monthSummary.netProfit >= 0 ? "header-profit profit" : "header-profit loss"}>本月 {signedMoney(monthSummary.netProfit)}</div></header>{loading ? <div className="center-screen">同步資料中...</div> : null}{!loading && tab === "add" ? <AddPage form={form} setForm={setForm} saveRecord={saveRecord} saving={saving} monthSummary={monthSummary} /> : null}{!loading && tab === "stats" ? <StatsPage records={records} /> : null}{!loading && tab === "records" ? <RecordsPage records={records} removeRecord={removeRecord} /> : null}{!loading && tab === "data" ? <DataPage records={records} signOut={signOut} /> : null}<nav className="bottom-nav"><button className={tab === "add" ? "active" : ""} onClick={() => setTab("add")}>＋<span>新增</span></button><button className={tab === "stats" ? "active" : ""} onClick={() => setTab("stats")}>▦<span>統計</span></button><button className={tab === "records" ? "active" : ""} onClick={() => setTab("records")}>≡<span>紀錄</span></button><button className={tab === "data" ? "active" : ""} onClick={() => setTab("data")}>⇅<span>資料</span></button></nav><Toast message={toast} /></div>;
 }
