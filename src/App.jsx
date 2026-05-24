@@ -88,8 +88,27 @@ function downloadText(filename, text, type = "application/json;charset=utf-8") {
 }
 const defaultForm = { date: todayString(), venue: "北屯店", eventName: "1200限時錦標賽", customEventName: "", buyIn: 1000, serviceFee: 200, reentryCount: 0, reentryBuyInTotal: 0, reentryServiceFeeTotal: 0, prize: 0, notes: "" };
 
-function Input({ label, value, onChange, type = "text", placeholder, min }) {
-  return <label className="field"><span>{label}</span><input type={type} min={min} value={value} placeholder={placeholder} onChange={(e) => onChange(e.target.value)} /></label>;
+function Input({ label, value, onChange, type = "text", placeholder, min, clearZero = false }) {
+  function handleFocus() {
+    if (clearZero && String(value) === "0") onChange("");
+  }
+  function handleBlur() {
+    if (clearZero && (value === "" || value === null || value === undefined)) onChange(0);
+  }
+  return (
+    <label className="field">
+      <span>{label}</span>
+      <input
+        type={type}
+        min={min}
+        value={value}
+        placeholder={placeholder}
+        onFocus={handleFocus}
+        onBlur={handleBlur}
+        onChange={(e) => onChange(e.target.value)}
+      />
+    </label>
+  );
 }
 function Select({ label, value, onChange, children }) {
   return <label className="field"><span>{label}</span><select value={value} onChange={(e) => onChange(e.target.value)}>{children}</select></label>;
@@ -364,19 +383,148 @@ function LoginPage() {
   );
 }
 
+
+function QuickButton({ active, onClick, children }) {
+  return <button type="button" className={`quick-button ${active ? "active" : ""}`} onClick={onClick}>{children}</button>;
+}
+
+function QuickRow({ children }) {
+  return <div className="quick-row">{children}</div>;
+}
+
 function AddPage({ form, setForm, saveRecord, saving, monthSummary }) {
-  const calculatedForm = useMemo(() => calcRecord({ event_name: form.eventName, custom_event_name: form.customEventName, buy_in: form.buyIn, service_fee: form.serviceFee, reentry_count: form.reentryCount, reentry_buyin_total: form.reentryBuyInTotal, reentry_service_fee_total: form.reentryServiceFeeTotal, prize: form.prize }), [form]);
-  function updateForm(key, value) { setForm((current) => ({ ...current, [key]: value })); }
-  function changeEventName(value) {
-    const t = EVENT_TEMPLATES[value];
-    setForm((current) => ({ ...current, eventName: value, customEventName: value === "自訂名稱" ? current.customEventName : "", buyIn: t ? t.buyIn : current.buyIn, serviceFee: t ? t.serviceFee : current.serviceFee, reentryCount: 0, reentryBuyInTotal: 0, reentryServiceFeeTotal: 0 }));
+  const calculatedForm = useMemo(() => calcRecord({
+    event_name: form.eventName,
+    custom_event_name: form.customEventName,
+    buy_in: form.buyIn,
+    service_fee: form.serviceFee,
+    reentry_count: form.reentryCount,
+    reentry_buyin_total: form.reentryBuyInTotal,
+    reentry_service_fee_total: form.reentryServiceFeeTotal,
+    prize: form.prize
+  }), [form]);
+
+  function updateForm(key, value) {
+    setForm((current) => ({ ...current, [key]: value }));
   }
+
+  function applyEventName(value) {
+    const t = EVENT_TEMPLATES[value];
+    setForm((current) => ({
+      ...current,
+      eventName: value,
+      customEventName: value === "自訂名稱" ? current.customEventName : "",
+      buyIn: t ? t.buyIn : current.buyIn,
+      serviceFee: t ? t.serviceFee : current.serviceFee,
+      reentryCount: 0,
+      reentryBuyInTotal: 0,
+      reentryServiceFeeTotal: 0,
+    }));
+  }
+
+  function applyServiceDiscount(rate) {
+    const base = EVENT_TEMPLATES[form.eventName]?.serviceFee ?? toNumber(form.serviceFee);
+    updateForm("serviceFee", Math.round(base * rate));
+  }
+
   function changeReentryCount(value) {
     const reentryCount = Math.max(0, Math.floor(toNumber(value)));
-    setForm((current) => ({ ...current, reentryCount, reentryBuyInTotal: Math.max(0, toNumber(current.buyIn)) * reentryCount, reentryServiceFeeTotal: Math.max(0, toNumber(current.serviceFee)) * reentryCount }));
+    setForm((current) => ({
+      ...current,
+      reentryCount,
+      reentryBuyInTotal: Math.max(0, toNumber(current.buyIn)) * reentryCount,
+      reentryServiceFeeTotal: Math.max(0, toNumber(current.serviceFee)) * reentryCount,
+    }));
   }
-  return <main className="page"><section className="hero-panel"><div><div className="hero-kicker">新增紀錄</div><h2>今天這場如何？</h2><p>快速記下，累積成趨勢。</p></div><div className="hero-pills"><div className="hero-pill"><span>本月淨利</span><strong className={monthSummary.netProfit >= 0 ? "profit" : "loss"}>{signedMoney(monthSummary.netProfit)}</strong></div><div className="hero-pill"><span>本月場次</span><strong>{monthSummary.totalGames}</strong></div></div></section><div className="mobile-card section-card"><div className="card-top"><div className="card-heading">賽事</div><div className="section-badge">1</div></div><div className="form-grid"><Input label="日期" type="date" value={form.date} onChange={(v) => updateForm("date", v)} /><Select label="限時錦標賽名稱" value={form.eventName} onChange={changeEventName}>{EVENT_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}</Select>{form.eventName === "自訂名稱" ? <Input label="自訂名稱" value={form.customEventName} onChange={(v) => updateForm("customEventName", v)} /> : null}</div></div><div className="mobile-card section-card"><div className="card-top"><div className="card-heading">買入</div><div className="section-badge">2</div></div><div className="form-grid two"><Input label="買入金額" type="number" min="0" value={form.buyIn} onChange={(v) => updateForm("buyIn", v)} /><Input label="買入服務費" type="number" min="0" value={form.serviceFee} onChange={(v) => updateForm("serviceFee", v)} /></div></div><div className="mobile-card section-card"><div className="card-top"><div className="card-heading">重新買入</div><div className="section-badge">3</div></div><div className="hint">先輸入重買次數，系統會帶入預估金額；若服務費有折扣，再手動改總額。</div><div className="form-grid"><Input label="重買次數" type="number" min="0" value={form.reentryCount} onChange={changeReentryCount} /><Input label="重買買入總額" type="number" min="0" value={form.reentryBuyInTotal} onChange={(v) => updateForm("reentryBuyInTotal", v)} /><Input label="重買服務費總額" type="number" min="0" value={form.reentryServiceFeeTotal} onChange={(v) => updateForm("reentryServiceFeeTotal", v)} /></div></div><div className="mobile-card section-card"><div className="card-top"><div className="card-heading">結果</div><div className="section-badge">4</div></div><div className="form-grid"><Input label="獎金 / Ticket 價值" type="number" min="0" value={form.prize} onChange={(v) => updateForm("prize", v)} /><Input label="備註" value={form.notes} onChange={(v) => updateForm("notes", v)} placeholder="例如：前 3 deal、重買服務費折扣" /></div></div><div className="sticky-preview"><div><div className="preview-main">{calculatedForm.netProfit >= 0 ? "盈利" : "虧損"} {signedMoney(calculatedForm.netProfit)}</div><div className="preview-sub">投入 {money(calculatedForm.totalCost)}｜ROI {percent(calculatedForm.roi)}</div></div><button className="primary-button save-button" type="button" onClick={saveRecord} disabled={saving}>{saving ? "儲存中..." : "儲存到雲端"}</button></div></main>;
+
+  const commonLevels = ["3400限時錦標賽", "6600限時錦標賽", "11000限時錦標賽"];
+
+  return (
+    <main className="page compact-page">
+      <div className="top-summary-card">
+        <div>
+          <div className="summary-label">本場預估淨利</div>
+          <div className={calculatedForm.netProfit >= 0 ? "summary-value profit" : "summary-value loss"}>
+            {signedMoney(calculatedForm.netProfit)}
+          </div>
+        </div>
+        <div className="summary-mini">
+          <span>投入</span>
+          <strong>{money(calculatedForm.totalCost)}</strong>
+        </div>
+      </div>
+
+      <div className="mobile-card section-card primary-section">
+        <div className="card-top">
+          <div>
+            <div className="card-heading">買入與獎金</div>
+            <div className="card-subtitle">可以先記買入，獎金之後到紀錄頁補上。</div>
+          </div>
+        </div>
+
+        <QuickRow>
+          {commonLevels.map((name) => (
+            <QuickButton key={name} active={form.eventName === name} onClick={() => applyEventName(name)}>
+              {name.replace("限時錦標賽", "")}
+            </QuickButton>
+          ))}
+        </QuickRow>
+
+        <div className="form-grid two">
+          <Input label="買入金額" type="number" min="0" value={form.buyIn} clearZero onChange={(v) => updateForm("buyIn", v)} />
+          <Input label="獎金 / Ticket 價值" type="number" min="0" value={form.prize} clearZero onChange={(v) => updateForm("prize", v)} />
+        </div>
+      </div>
+
+      <div className="mobile-card section-card">
+        <div className="card-top">
+          <div className="card-heading">賽事與服務費</div>
+        </div>
+        <div className="form-grid">
+          <Input label="日期" type="date" value={form.date} onChange={(v) => updateForm("date", v)} />
+          <Select label="限時錦標賽名稱" value={form.eventName} onChange={applyEventName}>
+            {EVENT_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}
+          </Select>
+          {form.eventName === "自訂名稱" ? <Input label="自訂名稱" value={form.customEventName} onChange={(v) => updateForm("customEventName", v)} /> : null}
+          <Input label="買入服務費" type="number" min="0" value={form.serviceFee} clearZero onChange={(v) => updateForm("serviceFee", v)} />
+        </div>
+
+        <QuickRow>
+          <QuickButton onClick={() => applyServiceDiscount(0.5)}>服務費 50%</QuickButton>
+          <QuickButton onClick={() => applyServiceDiscount(0)}>服務費 0</QuickButton>
+        </QuickRow>
+      </div>
+
+      <div className="mobile-card section-card">
+        <div className="card-top">
+          <div className="card-heading">重新買入</div>
+        </div>
+        <div className="hint">重買可以先輸入次數，系統會帶入預估金額；折扣可以再手動改總額。</div>
+        <div className="form-grid">
+          <Input label="重買次數" type="number" min="0" value={form.reentryCount} clearZero onChange={changeReentryCount} />
+          <Input label="重買買入總額" type="number" min="0" value={form.reentryBuyInTotal} clearZero onChange={(v) => updateForm("reentryBuyInTotal", v)} />
+          <Input label="重買服務費總額" type="number" min="0" value={form.reentryServiceFeeTotal} clearZero onChange={(v) => updateForm("reentryServiceFeeTotal", v)} />
+        </div>
+      </div>
+
+      <div className="mobile-card section-card">
+        <div className="card-heading">備註</div>
+        <Input label="備註" value={form.notes} onChange={(v) => updateForm("notes", v)} placeholder="例如：先記買入、獎金晚點補" />
+      </div>
+
+      <div className="sticky-preview slim">
+        <div>
+          <div className="preview-main">{calculatedForm.netProfit >= 0 ? "盈利" : "虧損"} {signedMoney(calculatedForm.netProfit)}</div>
+          <div className="preview-sub">買入含服務費 {money(calculatedForm.totalCost)}</div>
+        </div>
+        <button className="primary-button save-button" type="button" onClick={saveRecord} disabled={saving}>
+          {saving ? "儲存中..." : "儲存"}
+        </button>
+      </div>
+    </main>
+  );
 }
+
 
 function StatsPage({ records }) {
   const [rangePreset, setRangePreset] = useState("month");
@@ -384,23 +532,168 @@ function StatsPage({ records }) {
   const [endDate, setEndDate] = useState(todayString());
   const filteredRecords = useMemo(() => filterRecordsByDate(records, startDate, endDate), [records, startDate, endDate]);
   const overall = useMemo(() => sumRecords(filteredRecords), [filteredRecords]);
-    const byEventName = useMemo(() => groupBy(filteredRecords, (r) => r.displayEventName), [filteredRecords]);
+  const byEventName = useMemo(() => groupBy(filteredRecords, (r) => r.displayEventName), [filteredRecords]);
   const dailyProfitData = useMemo(() => makeDailyProfitData(filteredRecords), [filteredRecords]);
   const cumulativeProfitData = useMemo(() => makeCumulativeProfitData(filteredRecords), [filteredRecords]);
+
   function applyRangePreset(preset) {
-    setRangePreset(preset); const today = todayString();
+    setRangePreset(preset);
+    const today = todayString();
     if (preset === "all") { setStartDate(""); setEndDate(""); }
     else if (preset === "week") { setStartDate(startOfCurrentWeekString()); setEndDate(today); }
     else if (preset === "month") { setStartDate(startOfCurrentMonthString()); setEndDate(today); }
     else if (preset === "30days") { setStartDate(daysAgoString(29)); setEndDate(today); }
     else { if (!startDate) setStartDate(today); if (!endDate) setEndDate(today); }
   }
-  return <main className="page"><section className="hero-panel compact"><div><div className="hero-kicker">統計</div><h2>看趨勢，不只看單場</h2></div><div className="hero-pills mini"><div className="hero-pill"><span>區間淨利</span><strong className={overall.netProfit >= 0 ? "profit" : "loss"}>{signedMoney(overall.netProfit)}</strong></div></div></section><div className="range-row"><PillButton active={rangePreset === "all"} onClick={() => applyRangePreset("all")}>全部</PillButton><PillButton active={rangePreset === "week"} onClick={() => applyRangePreset("week")}>本週</PillButton><PillButton active={rangePreset === "month"} onClick={() => applyRangePreset("month")}>本月</PillButton><PillButton active={rangePreset === "30days"} onClick={() => applyRangePreset("30days")}>近30天</PillButton></div><div className="mobile-card"><div className="form-grid two"><Input label="開始日期" type="date" value={startDate} onChange={(v) => { setRangePreset("custom"); setStartDate(v); }} /><Input label="結束日期" type="date" value={endDate} onChange={(v) => { setRangePreset("custom"); setEndDate(v); }} /></div></div><div className="stats-grid"><StatCard title="淨利" value={signedMoney(overall.netProfit)} sub={`ROI ${percent(overall.roi)}`} accent="dark" /><StatCard title="總場次" value={`${overall.totalGames}`} sub={`Entries ${overall.totalEntries}`} /><StatCard title="服務費" value={money(overall.totalServiceFee)} /><StatCard title={<>總買入<span className="muted-inline">（含服務費）</span></>} value={money(overall.totalCost)} /><StatCard title="總獎金" value={money(overall.totalPrize)} /><StatCard title="平均每場" value={signedMoney(overall.avgProfit)} sub="平均淨利 / 場" /></div><div className="mobile-card chart-card"><div className="card-heading">累積淨利圖</div><CumulativeProfitChart data={cumulativeProfitData} /></div><div className="mobile-card chart-card"><div className="card-heading">每日盈虧圖</div><div className="hint">同一天多場會合併為單日淨利。</div><DailyProfitChart data={dailyProfitData} /></div><details className="mobile-card details-card" open><summary>依賽事名稱統計</summary><GroupTable rows={byEventName} /></details></main>;
+
+  return (
+    <main className="page">
+      <section className="stats-header">
+        <div>
+          <div className="hero-kicker">統計</div>
+          <h2>區間淨利</h2>
+        </div>
+        <strong className={overall.netProfit >= 0 ? "profit" : "loss"}>{signedMoney(overall.netProfit)}</strong>
+      </section>
+
+      <div className="range-row no-scroll">
+        <PillButton active={rangePreset === "all"} onClick={() => applyRangePreset("all")}>全部</PillButton>
+        <PillButton active={rangePreset === "week"} onClick={() => applyRangePreset("week")}>本週</PillButton>
+        <PillButton active={rangePreset === "month"} onClick={() => applyRangePreset("month")}>本月</PillButton>
+        <PillButton active={rangePreset === "30days"} onClick={() => applyRangePreset("30days")}>近30天</PillButton>
+      </div>
+
+      <div className="mobile-card">
+        <div className="form-grid two">
+          <Input label="開始日期" type="date" value={startDate} onChange={(v) => { setRangePreset("custom"); setStartDate(v); }} />
+          <Input label="結束日期" type="date" value={endDate} onChange={(v) => { setRangePreset("custom"); setEndDate(v); }} />
+        </div>
+      </div>
+
+      <div className="stats-grid fixed">
+        <StatCard title="淨利" value={signedMoney(overall.netProfit)} sub={`ROI ${percent(overall.roi)}`} accent="dark" />
+        <StatCard title="總場次" value={`${overall.totalGames}`} sub={`Entries ${overall.totalEntries}`} />
+        <StatCard title="服務費" value={money(overall.totalServiceFee)} />
+        <StatCard title={<>總買入<span className="muted-inline">（含服務費）</span></>} value={money(overall.totalCost)} />
+        <StatCard title="總獎金" value={money(overall.totalPrize)} />
+        <StatCard title="平均每場" value={signedMoney(overall.avgProfit)} sub="平均淨利 / 場" />
+      </div>
+
+      <div className="mobile-card chart-card">
+        <div className="card-heading">累積淨利圖</div>
+        <CumulativeProfitChart data={cumulativeProfitData} />
+      </div>
+      <div className="mobile-card chart-card">
+        <div className="card-heading">每日盈虧圖</div>
+        <div className="hint">同一天多場會合併為單日淨利。</div>
+        <DailyProfitChart data={dailyProfitData} />
+      </div>
+      <details className="mobile-card details-card" open>
+        <summary>依賽事名稱統計</summary>
+        <GroupTable rows={byEventName} />
+      </details>
+    </main>
+  );
 }
 
-function RecordsPage({ records, removeRecord }) {
-  return <main className="page"><section className="hero-panel compact"><div><div className="hero-kicker">紀錄</div><h2>每一筆資料都很有價值</h2></div><div className="hero-pills mini"><div className="hero-pill"><span>總筆數</span><strong>{records.length}</strong></div></div></section>{records.length === 0 ? <div className="empty big">還沒有紀錄。先新增一場。</div> : <div className="record-list">{records.map((record) => <div className="record-card" key={record.id}><div className="record-top"><div><div className="record-title">{record.displayEventName}</div><div className="record-meta">{record.date}</div></div><button className="delete-button" type="button" onClick={() => removeRecord(record.id)}>刪除</button></div><div className="record-numbers"><div><span>投入</span><strong>{money(record.totalCost)}</strong></div><div><span>獎金</span><strong>{money(record.prize)}</strong></div><div><span>淨利</span><strong className={record.netProfit >= 0 ? "profit" : "loss"}>{signedMoney(record.netProfit)}</strong></div></div><div className="record-small">Entries {record.entries}｜重買 {record.reentryCount}｜服務費 {money(record.totalServiceFee)}｜ROI {percent(record.roi)}</div>{record.notes ? <div className="record-note">{record.notes}</div> : null}</div>)}</div>}</main>;
+
+function RecordsPage({ records, removeRecord, updateRecord }) {
+  const [editingId, setEditingId] = useState(null);
+  const [draft, setDraft] = useState(null);
+  const [savingEdit, setSavingEdit] = useState(false);
+
+  function startEdit(record) {
+    setEditingId(record.id);
+    setDraft({
+      prize: record.prize,
+      notes: record.notes || "",
+      buy_in: record.buyIn,
+      service_fee: record.serviceFee,
+      reentry_count: record.reentryCount,
+      reentry_buyin_total: record.reentryBuyInTotal,
+      reentry_service_fee_total: record.reentryServiceFeeTotal,
+    });
+  }
+
+  function cancelEdit() {
+    setEditingId(null);
+    setDraft(null);
+  }
+
+  async function saveEdit(id) {
+    try {
+      setSavingEdit(true);
+      await updateRecord(id, draft);
+      cancelEdit();
+    } finally {
+      setSavingEdit(false);
+    }
+  }
+
+  return (
+    <main className="page">
+      <section className="stats-header">
+        <div>
+          <div className="hero-kicker">紀錄</div>
+          <h2>補獎金 / 修改紀錄</h2>
+        </div>
+        <strong>{records.length}</strong>
+      </section>
+
+      {records.length === 0 ? (
+        <div className="empty big">還沒有紀錄。先新增一場。</div>
+      ) : (
+        <div className="record-list">
+          {records.map((record) => (
+            <div className="record-card" key={record.id}>
+              <div className="record-top">
+                <div>
+                  <div className="record-title">{record.displayEventName}</div>
+                  <div className="record-meta">{record.date}</div>
+                </div>
+                <div className="record-actions">
+                  <button className="edit-button" type="button" onClick={() => startEdit(record)}>編輯</button>
+                  <button className="delete-button" type="button" onClick={() => removeRecord(record.id)}>刪除</button>
+                </div>
+              </div>
+
+              {editingId === record.id ? (
+                <div className="edit-panel">
+                  <div className="form-grid two">
+                    <Input label="獎金 / Ticket 價值" type="number" min="0" value={draft.prize} clearZero onChange={(v) => setDraft((d) => ({ ...d, prize: v }))} />
+                    <Input label="買入服務費" type="number" min="0" value={draft.service_fee} clearZero onChange={(v) => setDraft((d) => ({ ...d, service_fee: v }))} />
+                    <Input label="買入金額" type="number" min="0" value={draft.buy_in} clearZero onChange={(v) => setDraft((d) => ({ ...d, buy_in: v }))} />
+                    <Input label="重買次數" type="number" min="0" value={draft.reentry_count} clearZero onChange={(v) => setDraft((d) => ({ ...d, reentry_count: v }))} />
+                    <Input label="重買買入總額" type="number" min="0" value={draft.reentry_buyin_total} clearZero onChange={(v) => setDraft((d) => ({ ...d, reentry_buyin_total: v }))} />
+                    <Input label="重買服務費總額" type="number" min="0" value={draft.reentry_service_fee_total} clearZero onChange={(v) => setDraft((d) => ({ ...d, reentry_service_fee_total: v }))} />
+                  </div>
+                  <Input label="備註" value={draft.notes} onChange={(v) => setDraft((d) => ({ ...d, notes: v }))} />
+                  <div className="edit-actions">
+                    <button className="secondary-button" type="button" onClick={cancelEdit}>取消</button>
+                    <button className="primary-button small" type="button" onClick={() => saveEdit(record.id)} disabled={savingEdit}>
+                      {savingEdit ? "儲存中..." : "儲存修改"}
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <div className="record-numbers">
+                    <div><span>買入含服務費</span><strong>{money(record.totalCost)}</strong></div>
+                    <div><span>獎金</span><strong>{money(record.prize)}</strong></div>
+                    <div><span>淨利</span><strong className={record.netProfit >= 0 ? "profit" : "loss"}>{signedMoney(record.netProfit)}</strong></div>
+                  </div>
+                  <div className="record-small">Entries {record.entries}｜重買 {record.reentryCount}｜服務費 {money(record.totalServiceFee)}｜ROI {percent(record.roi)}</div>
+                  {record.notes ? <div className="record-note">{record.notes}</div> : null}
+                </>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </main>
+  );
 }
+
 
 function DataPage({ records, signOut }) {
   function exportBackup() {
@@ -496,6 +789,27 @@ export default function App() {
     }
   }
 
+  async function updateRecord(id, draft) {
+    try {
+      const payload = {
+        prize: toNumber(draft.prize),
+        notes: draft.notes || "",
+        buy_in: toNumber(draft.buy_in),
+        service_fee: toNumber(draft.service_fee),
+        reentry_count: toNumber(draft.reentry_count),
+        reentry_buyin_total: toNumber(draft.reentry_buyin_total),
+        reentry_service_fee_total: toNumber(draft.reentry_service_fee_total),
+      };
+      const { error } = await supabase.from("tournament_records").update(payload).eq("id", id);
+      if (error) throw error;
+      await loadRecords();
+      setToast("已更新紀錄");
+    } catch (error) {
+      alert(error.message || "更新失敗");
+      throw error;
+    }
+  }
+
   async function signOut() {
     await supabase.auth.signOut();
   }
@@ -514,5 +828,5 @@ export default function App() {
     return <LoginPage />;
   }
 
-  return <div className="app-shell"><div className="bg-orb orb-a" /><div className="bg-orb orb-b" /><header className="app-header"><div><div className="app-kicker">Cloud Version</div><h1>限時錦標賽記帳</h1></div><div className={monthSummary.netProfit >= 0 ? "header-profit profit" : "header-profit loss"}>本月 {signedMoney(monthSummary.netProfit)}</div></header>{loading ? <div className="center-screen">同步資料中...</div> : null}{!loading && tab === "add" ? <AddPage form={form} setForm={setForm} saveRecord={saveRecord} saving={saving} monthSummary={monthSummary} /> : null}{!loading && tab === "stats" ? <StatsPage records={records} /> : null}{!loading && tab === "records" ? <RecordsPage records={records} removeRecord={removeRecord} /> : null}{!loading && tab === "data" ? <DataPage records={records} signOut={signOut} /> : null}<nav className="bottom-nav"><button className={tab === "add" ? "active" : ""} onClick={() => setTab("add")}>＋<span>新增</span></button><button className={tab === "stats" ? "active" : ""} onClick={() => setTab("stats")}>▦<span>統計</span></button><button className={tab === "records" ? "active" : ""} onClick={() => setTab("records")}>≡<span>紀錄</span></button><button className={tab === "data" ? "active" : ""} onClick={() => setTab("data")}>⇅<span>資料</span></button></nav><Toast message={toast} /></div>;
+  return <div className="app-shell"><div className="bg-orb orb-a" /><div className="bg-orb orb-b" /><header className="app-header"><div><div className="app-kicker">Cloud Version</div><h1>限時錦標賽記帳</h1></div><div className={monthSummary.netProfit >= 0 ? "header-profit profit" : "header-profit loss"}>本月 {signedMoney(monthSummary.netProfit)}</div></header>{loading ? <div className="center-screen">同步資料中...</div> : null}{!loading && tab === "add" ? <AddPage form={form} setForm={setForm} saveRecord={saveRecord} saving={saving} monthSummary={monthSummary} /> : null}{!loading && tab === "stats" ? <StatsPage records={records} /> : null}{!loading && tab === "records" ? <RecordsPage records={records} removeRecord={removeRecord} updateRecord={updateRecord} /> : null}{!loading && tab === "data" ? <DataPage records={records} signOut={signOut} /> : null}<nav className="bottom-nav"><button className={tab === "add" ? "active" : ""} onClick={() => setTab("add")}>＋<span>新增</span></button><button className={tab === "stats" ? "active" : ""} onClick={() => setTab("stats")}>▦<span>統計</span></button><button className={tab === "records" ? "active" : ""} onClick={() => setTab("records")}>≡<span>紀錄</span></button><button className={tab === "data" ? "active" : ""} onClick={() => setTab("data")}>⇅<span>資料</span></button></nav><Toast message={toast} /></div>;
 }
