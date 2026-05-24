@@ -487,3 +487,47 @@ input[type="number"]{-moz-appearance:textfield}
   .stats-grid.fixed .stat-value{font-size:20px}
   .record-actions{flex-direction:column}
 }
+
+
+/* v12 add flow refinement */
+.entry-card{
+  margin-top:0;
+}
+.entry-card .form-grid{
+  gap:14px;
+}
+.field-group{
+  display:grid;
+  gap:8px;
+}
+.field-label{
+  color:#344054;
+  font-size:13px;
+  font-weight:900;
+}
+.field-group .quick-row{
+  padding:0;
+}
+.field-group .field{
+  margin-top:2px;
+}
+.service-group{
+  padding-top:2px;
+}
+.service-group .quick-button{
+  min-width:100px;
+}
+.compact-page .mobile-card:first-child{
+  margin-top:0;
+}
+.top-summary-card{
+  display:none;
+}
+@media (min-width:720px){
+  .entry-card .form-grid{
+    grid-template-columns:1fr 1fr;
+  }
+  .entry-card .field-group{
+    grid-column:span 2;
+  }
+}

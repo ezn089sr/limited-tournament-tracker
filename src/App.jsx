@@ -441,58 +441,48 @@ function AddPage({ form, setForm, saveRecord, saving, monthSummary }) {
 
   return (
     <main className="page compact-page">
-      <div className="top-summary-card">
-        <div>
-          <div className="summary-label">本場預估淨利</div>
-          <div className={calculatedForm.netProfit >= 0 ? "summary-value profit" : "summary-value loss"}>
-            {signedMoney(calculatedForm.netProfit)}
-          </div>
-        </div>
-        <div className="summary-mini">
-          <span>投入</span>
-          <strong>{money(calculatedForm.totalCost)}</strong>
-        </div>
-      </div>
-
-      <div className="mobile-card section-card primary-section">
+      <div className="mobile-card section-card primary-section entry-card">
         <div className="card-top">
           <div>
-            <div className="card-heading">買入與獎金</div>
-            <div className="card-subtitle">可以先記買入，獎金之後到紀錄頁補上。</div>
+            <div className="card-heading">新增限時紀錄</div>
+            <div className="card-subtitle">先記買入也可以，獎金晚點到紀錄頁補上。</div>
           </div>
         </div>
 
-        <QuickRow>
-          {commonLevels.map((name) => (
-            <QuickButton key={name} active={form.eventName === name} onClick={() => applyEventName(name)}>
-              {name.replace("限時錦標賽", "")}
-            </QuickButton>
-          ))}
-        </QuickRow>
-
-        <div className="form-grid two">
-          <Input label="買入金額" type="number" min="0" value={form.buyIn} clearZero onChange={(v) => updateForm("buyIn", v)} />
-          <Input label="獎金 / Ticket 價值" type="number" min="0" value={form.prize} clearZero onChange={(v) => updateForm("prize", v)} />
-        </div>
-      </div>
-
-      <div className="mobile-card section-card">
-        <div className="card-top">
-          <div className="card-heading">賽事與服務費</div>
-        </div>
         <div className="form-grid">
           <Input label="日期" type="date" value={form.date} onChange={(v) => updateForm("date", v)} />
-          <Select label="限時錦標賽名稱" value={form.eventName} onChange={applyEventName}>
-            {EVENT_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}
-          </Select>
-          {form.eventName === "自訂名稱" ? <Input label="自訂名稱" value={form.customEventName} onChange={(v) => updateForm("customEventName", v)} /> : null}
-          <Input label="買入服務費" type="number" min="0" value={form.serviceFee} clearZero onChange={(v) => updateForm("serviceFee", v)} />
-        </div>
 
-        <QuickRow>
-          <QuickButton onClick={() => applyServiceDiscount(0.5)}>服務費 50%</QuickButton>
-          <QuickButton onClick={() => applyServiceDiscount(0)}>服務費 0</QuickButton>
-        </QuickRow>
+          <div className="field-group">
+            <div className="field-label">錦標賽名稱</div>
+            <QuickRow>
+              {commonLevels.map((name) => (
+                <QuickButton key={name} active={form.eventName === name} onClick={() => applyEventName(name)}>
+                  {name.replace("限時錦標賽", "")}
+                </QuickButton>
+              ))}
+            </QuickRow>
+            <Select label="完整選單" value={form.eventName} onChange={applyEventName}>
+              {EVENT_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}
+            </Select>
+          </div>
+
+          {form.eventName === "自訂名稱" ? (
+            <Input label="自訂名稱" value={form.customEventName} onChange={(v) => updateForm("customEventName", v)} />
+          ) : null}
+
+          <Input label="買入金額" type="number" min="0" value={form.buyIn} clearZero onChange={(v) => updateForm("buyIn", v)} />
+
+          <div className="field-group service-group">
+            <div className="field-label">服務費</div>
+            <QuickRow>
+              <QuickButton onClick={() => applyServiceDiscount(0.5)}>折扣 50%</QuickButton>
+              <QuickButton onClick={() => applyServiceDiscount(0)}>折扣 100%</QuickButton>
+            </QuickRow>
+            <Input label="買入服務費" type="number" min="0" value={form.serviceFee} clearZero onChange={(v) => updateForm("serviceFee", v)} />
+          </div>
+
+          <Input label="獎金 / Ticket 價值" type="number" min="0" value={form.prize} clearZero onChange={(v) => updateForm("prize", v)} />
+        </div>
       </div>
 
       <div className="mobile-card section-card">
