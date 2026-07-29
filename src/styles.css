@@ -1101,3 +1101,33 @@ input[type="number"]{-moz-appearance:textfield}
     font-size:15px;
   }
 }
+
+
+/* v30 chart axis hotfix */
+.y-axis-label{
+  font-variant-numeric:tabular-nums;
+}
+@media (max-width: 767px){
+  .chart-svg.compact{
+    overflow:visible;
+  }
+  .y-axis-label{
+    font-size:10px;
+    font-weight:900;
+    fill:#667085;
+  }
+  .grid-line{
+    stroke:#e7edf5;
+    stroke-width:.9;
+  }
+  .zero-axis{
+    stroke:#cfd8e6;
+    stroke-width:1.1;
+  }
+  .chart-svg .dot{
+    filter:none;
+  }
+  .chart-summary-row.three{
+    gap:8px;
+  }
+}

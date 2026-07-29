@@ -59,10 +59,14 @@ function percent(n) { return Number.isFinite(n) ? `${n.toFixed(1)}%` : "0.0%"; }
 
 function compactMoney(n) {
   const v = toNumber(n);
+  if (v === 0) return "0";
   const sign = v < 0 ? "-" : "";
   const abs = Math.abs(v);
-  if (abs >= 10000) return `${sign}${Math.round(abs / 1000)}k`;
-  return `${sign}${money(abs)}`;
+  if (abs >= 1000) {
+    const k = abs / 1000;
+    return `${sign}${Number.isInteger(k) ? k.toFixed(0) : k.toFixed(1)}k`;
+  }
+  return `${sign}${abs.toLocaleString("zh-TW")}`;
 }
 
 function niceStep(rawStep) {
@@ -376,7 +380,7 @@ function CumulativeProfitChart({ data }) {
   const isMobile = typeof window !== "undefined" ? window.innerWidth < 768 : false;
   const width = isMobile ? 360 : 680;
   const height = isMobile ? 228 : 240;
-  const padding = { top: 20, right: 18, bottom: 34, left: isMobile ? 42 : 54 };
+  const padding = { top: 20, right: 18, bottom: 34, left: isMobile ? 66 : 62 };
   const values = data.map((i) => i.cumulativeProfit);
   const rawMinValue = Math.min(0, ...values);
   const rawMaxValue = Math.max(0, ...values);
@@ -396,11 +400,14 @@ function CumulativeProfitChart({ data }) {
   const labelIndexes = Array.from(new Set([0, Math.floor((data.length - 1) / 2), data.length - 1])).sort((a, b) => a - b);
   const showMarkerText = !isMobile;
 
-  const markers = [
-    { index: minIndex, value: minValue, text: `最低 ${signedMoney(minValue)}`, tone: "muted", position: "below" },
-    { index: maxIndex, value: maxValue, text: `最高 ${signedMoney(maxValue)}`, tone: maxValue >= 0 ? "profit" : "loss", position: "above" },
-    { index: data.length - 1, value: last.cumulativeProfit, text: `目前 ${signedMoney(last.cumulativeProfit)}`, tone: last.cumulativeProfit >= 0 ? "profit" : "loss", position: "above" },
-  ].filter((marker, index, arr) => arr.findIndex((item) => item.index === marker.index && item.value === marker.value) === index);
+  const markerSource = isMobile
+    ? [{ index: data.length - 1, value: last.cumulativeProfit, text: `目前 ${signedMoney(last.cumulativeProfit)}`, tone: last.cumulativeProfit >= 0 ? "profit" : "loss", position: "above" }]
+    : [
+        { index: minIndex, value: minValue, text: `最低 ${signedMoney(minValue)}`, tone: "muted", position: "below" },
+        { index: maxIndex, value: maxValue, text: `最高 ${signedMoney(maxValue)}`, tone: maxValue >= 0 ? "profit" : "loss", position: "above" },
+        { index: data.length - 1, value: last.cumulativeProfit, text: `目前 ${signedMoney(last.cumulativeProfit)}`, tone: last.cumulativeProfit >= 0 ? "profit" : "loss", position: "above" },
+      ];
+  const markers = markerSource.filter((marker, index, arr) => arr.findIndex((item) => item.index === marker.index && item.value === marker.value) === index);
 
   return (
     <div className="chart-panel compact-chart">
@@ -430,7 +437,7 @@ function CumulativeProfitChart({ data }) {
           {yTicks.map((tick) => (
             <g key={`tick-${tick}`}>
               <line x1={padding.left} x2={width - padding.right} y1={y(tick)} y2={y(tick)} className={tick === 0 ? "axis zero-axis" : "grid-line"} />
-              <text x={padding.left - 8} y={y(tick) + 4} textAnchor="end" className="chart-label y-axis-label">{compactMoney(tick)}</text>
+              <text x={padding.left - 12} y={y(tick) + 4} textAnchor="end" className="chart-label y-axis-label">{compactMoney(tick)}</text>
             </g>
           ))}
           {data.length > 1 ? <polygon className="area-fill" points={`${padding.left},${zeroY} ${points} ${x(data.length - 1)},${zeroY}`} /> : null}
@@ -471,7 +478,7 @@ function DailyProfitChart({ data }) {
   const isMobile = typeof window !== "undefined" ? window.innerWidth < 768 : false;
   const width = isMobile ? 360 : 680;
   const height = isMobile ? 228 : 240;
-  const padding = { top: 20, right: 18, bottom: 34, left: isMobile ? 42 : 54 };
+  const padding = { top: 20, right: 18, bottom: 34, left: isMobile ? 66 : 62 };
   const values = data.map((i) => i.netProfit);
   const rawMinValue = Math.min(0, ...values);
   const rawMaxValue = Math.max(0, ...values);
@@ -505,7 +512,7 @@ function DailyProfitChart({ data }) {
           {yTicks.map((tick) => (
             <g key={`daily-tick-${tick}`}>
               <line x1={padding.left} x2={width - padding.right} y1={y(tick)} y2={y(tick)} className={tick === 0 ? "axis zero-axis" : "grid-line"} />
-              <text x={padding.left - 8} y={y(tick) + 4} textAnchor="end" className="chart-label y-axis-label">{compactMoney(tick)}</text>
+              <text x={padding.left - 12} y={y(tick) + 4} textAnchor="end" className="chart-label y-axis-label">{compactMoney(tick)}</text>
             </g>
           ))}
           {data.map((item, index) => {
@@ -1241,7 +1248,7 @@ function PublicSharePageContent({ snapshot, loading, error }) {
   const width = 900;
   const height = 260;
   const pad = 36;
-  const leftPad = 78;
+  const leftPad = 92;
   const rightPad = 36;
   const values = chartData.map((i) => toNumber(i.value ?? i.cumulativeProfit));
   const rawMinValue = Math.min(0, ...values);
