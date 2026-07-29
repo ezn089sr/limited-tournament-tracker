@@ -180,3 +180,9 @@ npm run dev
 - 修正統計頁按分享時 Can't find variable: session
 - 將 session 從 App 傳入 StatsPage
 - 保留 V25 正式分享連結功能
+
+
+## v27 Share Route Hotfix
+- 新增 vercel.json
+- 修正 /share/{token} 直接開啟時 Vercel 404: NOT_FOUND
+- 所有路徑會回到 index.html，再由 React App 處理分享頁路由
