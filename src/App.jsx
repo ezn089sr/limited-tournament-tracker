@@ -146,6 +146,31 @@ function Toast({ message }) {
 function EmptyChart({ message }) {
   return <div className="chart-empty">{message}</div>;
 }
+
+function dataUrlToFile(dataUrl, filename) {
+  const arr = dataUrl.split(",");
+  const mime = arr[0].match(/:(.*?);/)?.[1] || "image/png";
+  const binary = atob(arr[1]);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+  return new File([bytes], filename, { type: mime });
+}
+
+async function captureElementAsPng(element) {
+  const { default: html2canvas } = await import("html2canvas");
+  const canvas = await html2canvas(element, {
+    backgroundColor: "#f3f6fb",
+    scale: Math.min(2, window.devicePixelRatio || 1.5),
+    useCORS: true,
+    allowTaint: true,
+    logging: false,
+    scrollX: 0,
+    scrollY: -window.scrollY,
+    windowWidth: document.documentElement.scrollWidth,
+  });
+  return canvas.toDataURL("image/png");
+}
+
 function CumulativeProfitChart({ data }) {
   if (!data.length) return <EmptyChart message="這個區間還沒有紀錄。" />;
 
@@ -167,6 +192,7 @@ function CumulativeProfitChart({ data }) {
   const maxIndex = values.indexOf(maxValue);
   const minIndex = values.indexOf(minValue);
   const labelIndexes = Array.from(new Set([0, Math.floor((data.length - 1) / 2), data.length - 1])).sort((a, b) => a - b);
+  const showMarkerText = !isMobile;
 
   const markers = [
     { index: minIndex, value: minValue, text: `最低 ${signedMoney(minValue)}`, tone: "muted", position: "below" },
@@ -193,7 +219,14 @@ function CumulativeProfitChart({ data }) {
 
       <div className="chart-scroll no-scroll">
         <svg viewBox={`0 0 ${width} ${height}`} className="chart-svg compact">
+          <defs>
+            <linearGradient id="cumulativeAreaFill" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="rgba(37, 99, 235, 0.18)" />
+              <stop offset="100%" stopColor="rgba(37, 99, 235, 0)" />
+            </linearGradient>
+          </defs>
           <line x1={padding.left} x2={width - padding.right} y1={zeroY} y2={zeroY} className="axis" />
+          {data.length > 1 ? <polygon className="area-fill" points={`${padding.left},${zeroY} ${points} ${x(data.length - 1)},${zeroY}`} /> : null}
           {data.length > 1 ? <polyline fill="none" className="line" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" points={points} /> : null}
 
           {markers.map((marker) => {
@@ -208,15 +241,17 @@ function CumulativeProfitChart({ data }) {
             const cls = marker.tone === "profit" ? "svg-profit" : marker.tone === "loss" ? "svg-loss" : "chart-label strong";
             return (
               <g key={`${marker.index}-${marker.text}`}>
-                <circle cx={cx} cy={cy} r="5" className="dot" />
-                <text x={cx + dx} y={textY} textAnchor={textAnchor} className={cls}>{marker.text}</text>
+                <circle cx={cx} cy={cy} r={isMobile ? "4.5" : "5"} className="dot" />
+                {showMarkerText ? <text x={cx + dx} y={textY} textAnchor={textAnchor} className={cls}>{marker.text}</text> : null}
               </g>
             );
           })}
 
-          {labelIndexes.map((index) => (
-            <text key={`label-${index}`} x={x(index)} y={height - 8} textAnchor="middle" className="chart-label axis-label">{data[index]?.label}</text>
-          ))}
+          {labelIndexes.map((index) => {
+            const anchor = index === 0 ? "start" : index === data.length - 1 ? "end" : "middle";
+            const dx = anchor === "start" ? 2 : anchor === "end" ? -2 : 0;
+            return <text key={`label-${index}`} x={x(index) + dx} y={height - 8} textAnchor={anchor} className="chart-label axis-label">{data[index]?.label}</text>;
+          })}
         </svg>
       </div>
     </div>
@@ -266,7 +301,9 @@ function DailyProfitChart({ data }) {
             return (
               <g key={item.date}>
                 <rect x={centerX - barWidth / 2} y={rectY} width={barWidth} height={rectHeight} rx="5" className={item.netProfit >= 0 ? "bar-profit" : "bar-loss"} />
-                {labelIndexes.includes(index) ? <text x={centerX} y={height - 8} textAnchor="middle" className="chart-label axis-label">{item.label}</text> : null}
+                {labelIndexes.includes(index) ? (
+                  <text x={centerX + (index === 0 ? 2 : index === data.length - 1 ? -2 : 0)} y={height - 8} textAnchor={index === 0 ? "start" : index === data.length - 1 ? "end" : "middle"} className="chart-label axis-label">{item.label}</text>
+                ) : null}
               </g>
             );
           })}
@@ -644,6 +681,8 @@ function AddPage({ form, setForm, saveRecord, saving, monthSummary }) {
 
 function StatsPage({ records }) {
   const [rangePreset, setRangePreset] = useState("month");
+  const [sharing, setSharing] = useState(false);
+  const shareRef = useRef(null);
   const [startDate, setStartDate] = useState(startOfCurrentMonthString());
   const [endDate, setEndDate] = useState(todayString());
   const filteredRecords = useMemo(() => filterRecordsByDate(records, startDate, endDate), [records, startDate, endDate]);
@@ -662,14 +701,51 @@ function StatsPage({ records }) {
     else { if (!startDate) setStartDate(today); if (!endDate) setEndDate(today); }
   }
 
+  async function shareStatsImage() {
+    if (!shareRef.current || sharing) return;
+
+    try {
+      setSharing(true);
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+
+      const dataUrl = await captureElementAsPng(shareRef.current);
+      const file = dataUrlToFile(dataUrl, `限時錦標賽統計-${todayString()}.png`);
+
+      if (navigator.canShare?.({ files: [file] })) {
+        await navigator.share({
+          title: "限時錦標賽記帳統計",
+          text: `我的限時錦標賽統計：${signedMoney(overall.netProfit)}`,
+          files: [file],
+        });
+      } else {
+        const link = document.createElement("a");
+        link.href = dataUrl;
+        link.download = file.name;
+        link.click();
+        alert("已產生統計圖片。若沒有跳出分享面板，請從相簿或下載檔分享到 LINE。");
+      }
+    } catch (error) {
+      if (error?.name !== "AbortError") {
+        alert(error.message || "產生分享圖片失敗，請稍後再試");
+      }
+    } finally {
+      setSharing(false);
+    }
+  }
+
   return (
-    <main className="page">
+    <main className="page share-page" ref={shareRef}>
       <section className="stats-header">
         <div>
           <div className="hero-kicker">統計</div>
           <h2>區間淨利</h2>
         </div>
-        <strong className={overall.netProfit >= 0 ? "profit" : "loss"}>{signedMoney(overall.netProfit)}</strong>
+        <div className="stats-header-actions">
+          <strong className={overall.netProfit >= 0 ? "profit" : "loss"}>{signedMoney(overall.netProfit)}</strong>
+          <button className="share-button" type="button" onClick={shareStatsImage} disabled={sharing}>
+            {sharing ? "產生中..." : "分享"}
+          </button>
+        </div>
       </section>
 
       <div className="range-row no-scroll">
@@ -686,22 +762,33 @@ function StatsPage({ records }) {
         </div>
       </div>
 
-      <div className="stats-grid fixed">
+      <div className="stats-grid fixed polished">
         <StatCard title="淨利" value={signedMoney(overall.netProfit)} sub={`ROI ${percent(overall.roi)}`} accent="dark" />
-        <StatCard title="總場次" value={`${overall.totalGames}`} sub={`Entries ${overall.totalEntries}`} />
-        <StatCard title="服務費" value={money(overall.totalServiceFee)} />
-        <StatCard title={<>總買入<span className="muted-inline">（含服務費）</span></>} value={money(overall.totalCost)} />
-        <StatCard title="總獎金" value={money(overall.totalPrize)} />
+        <StatCard title={<>總買入<span className="muted-inline">（含服務費）</span></>} value={money(overall.totalCost)} sub="買入 + 服務費" />
+        <StatCard title="總獎金" value={money(overall.totalPrize)} sub="區間累積獎金" />
+        <StatCard title="服務費" value={money(overall.totalServiceFee)} sub="區間累積服務費" />
         <StatCard title="平均每場" value={signedMoney(overall.avgProfit)} sub="平均淨利 / 場" />
+        <StatCard title="總場次" value={`${overall.totalGames}`} sub="已紀錄場次" />
       </div>
 
-      <div className="mobile-card chart-card">
-        <div className="card-heading">累積淨利圖</div>
+      <div className="mobile-card chart-card premium">
+        <div className="chart-topbar">
+          <div>
+            <div className="card-heading">累積淨利圖</div>
+            <div className="hint">看整段走勢變化，快速掌握目前、最高與最低位置。</div>
+          </div>
+          <div className="chart-range-badge">{startDate || "全部"} {endDate ? `→ ${endDate}` : ""}</div>
+        </div>
         <CumulativeProfitChart data={cumulativeProfitData} />
       </div>
-      <div className="mobile-card chart-card">
-        <div className="card-heading">每日盈虧圖</div>
-        <div className="hint">同一天多場會合併為單日淨利。</div>
+      <div className="mobile-card chart-card premium">
+        <div className="chart-topbar">
+          <div>
+            <div className="card-heading">每日盈虧圖</div>
+            <div className="hint">同一天多場會合併為單日淨利。</div>
+          </div>
+          <div className="chart-range-badge subtle">按日期彙總</div>
+        </div>
         <DailyProfitChart data={dailyProfitData} />
       </div>
       <details className="mobile-card details-card" open>
