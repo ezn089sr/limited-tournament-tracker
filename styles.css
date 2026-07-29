@@ -1,0 +1,1243 @@
+
+import React, { useEffect, useMemo, useState } from "react";
+import { supabase } from "./supabase";
+
+const EVENT_TEMPLATES = {
+  "1200限時錦標賽": { buyIn: 1000, serviceFee: 200 },
+  "3400限時錦標賽": { buyIn: 3000, serviceFee: 400 },
+  "6600限時錦標賽": { buyIn: 6000, serviceFee: 600 },
+  "11000限時錦標賽": { buyIn: 10000, serviceFee: 1000 },
+  "22000限時錦標賽": { buyIn: 20000, serviceFee: 2000 },
+  "33000限時錦標賽": { buyIn: 30000, serviceFee: 3000 },
+  "53000限時錦標賽": { buyIn: 50000, serviceFee: 3000 },
+};
+const EVENT_OPTIONS = [...Object.keys(EVENT_TEMPLATES), "自訂名稱"];
+
+function formatLocalDate(date) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+function todayString() { return formatLocalDate(new Date()); }
+function startOfCurrentWeekString() {
+  const now = new Date();
+  const day = now.getDay();
+  const diff = day === 0 ? 6 : day - 1;
+  const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  monday.setDate(monday.getDate() - diff);
+  return formatLocalDate(monday);
+}
+function startOfCurrentMonthString() {
+  const now = new Date();
+  return formatLocalDate(new Date(now.getFullYear(), now.getMonth(), 1));
+}
+function daysAgoString(days) {
+  const d = new Date();
+  d.setDate(d.getDate() - days);
+  return formatLocalDate(d);
+}
+function toNumber(v, f = 0) { const n = Number(v); return Number.isFinite(n) ? n : f; }
+function money(n) { return toNumber(n).toLocaleString("zh-TW", { maximumFractionDigits: 0 }); }
+function signedMoney(n) { const v = toNumber(n); return `${v >= 0 ? "+" : "-"}${money(Math.abs(v))}`; }
+function percent(n) { return Number.isFinite(n) ? `${n.toFixed(1)}%` : "0.0%"; }
+function dateLabel(s) { const p = String(s || "").split("-"); return p.length === 3 ? `${Number(p[1])}/${Number(p[2])}` : s || ""; }
+function getDisplayEventName(r) {
+  return r.event_name === "自訂名稱"
+    ? (String(r.custom_event_name || "自訂名稱").trim() || "自訂名稱")
+    : (String(r.event_name || "未命名賽事").trim() || "未命名賽事");
+}
+function calcRecord(r) {
+  const buyIn = Math.max(0, toNumber(r.buy_in));
+  const serviceFee = Math.max(0, toNumber(r.service_fee));
+  const reentryCount = Math.max(0, Math.floor(toNumber(r.reentry_count)));
+  const reentryBuyInTotal = Math.max(0, toNumber(r.reentry_buyin_total));
+  const reentryServiceFeeTotal = Math.max(0, toNumber(r.reentry_service_fee_total));
+  const prize = Math.max(0, toNumber(r.prize));
+  const entries = 1 + reentryCount;
+  const totalBuyIn = buyIn + reentryBuyInTotal;
+  const totalServiceFee = serviceFee + reentryServiceFeeTotal;
+  const totalCost = totalBuyIn + totalServiceFee;
+  const netProfit = prize - totalCost;
+  const roi = totalCost > 0 ? (netProfit / totalCost) * 100 : 0;
+  return { ...r, buyIn, serviceFee, reentryCount, reentryBuyInTotal, reentryServiceFeeTotal, prize, entries, displayEventName: getDisplayEventName(r), totalBuyIn, totalServiceFee, totalCost, netProfit, roi };
+}
+function sumRecords(records) {
+  const c = records.map(calcRecord);
+  const totalGames = c.length;
+  const totalEntries = c.reduce((s, r) => s + r.entries, 0);
+  const totalReentries = c.reduce((s, r) => s + r.reentryCount, 0);
+  const totalBuyIn = c.reduce((s, r) => s + r.totalBuyIn, 0);
+  const totalServiceFee = c.reduce((s, r) => s + r.totalServiceFee, 0);
+  const totalCost = c.reduce((s, r) => s + r.totalCost, 0);
+  const totalPrize = c.reduce((s, r) => s + r.prize, 0);
+  const netProfit = c.reduce((s, r) => s + r.netProfit, 0);
+  const roi = totalCost > 0 ? (netProfit / totalCost) * 100 : 0;
+  const avgProfit = totalGames > 0 ? netProfit / totalGames : 0;
+  return { totalGames, totalEntries, totalReentries, totalBuyIn, totalServiceFee, totalCost, totalPrize, netProfit, roi, avgProfit };
+}
+function groupBy(records, getKey) {
+  const m = new Map();
+  records.forEach((r) => { const k = getKey(r) || "未分類"; if (!m.has(k)) m.set(k, []); m.get(k).push(r); });
+  return Array.from(m.entries()).map(([label, items]) => ({ label, ...sumRecords(items) })).sort((a, b) => b.netProfit - a.netProfit);
+}
+function filterRecordsByDate(records, startDate, endDate) {
+  return records.filter((r) => r.date && (!startDate || r.date >= startDate) && (!endDate || r.date <= endDate));
+}
+function makeDailyProfitData(records) {
+  const m = new Map();
+  records.forEach((r) => m.set(r.date, (m.get(r.date) || 0) + r.netProfit));
+  return Array.from(m.entries()).map(([date, netProfit]) => ({ date, label: dateLabel(date), netProfit })).sort((a, b) => a.date.localeCompare(b.date));
+}
+function makeCumulativeProfitData(records) {
+  let running = 0;
+  return records.slice().sort((a, b) => {
+    const dc = String(a.date || "").localeCompare(String(b.date || ""));
+    if (dc !== 0) return dc;
+    return String(a.created_at || "").localeCompare(String(b.created_at || ""));
+  }).map((r, i) => {
+    running += r.netProfit;
+    return { index: i + 1, date: r.date, label: dateLabel(r.date), cumulativeProfit: running };
+  });
+}
+function downloadText(filename, text, type = "application/json;charset=utf-8") {
+  const blob = new Blob([text], { type });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url; link.download = filename; document.body.appendChild(link); link.click(); document.body.removeChild(link); URL.revokeObjectURL(url);
+}
+const defaultForm = { date: todayString(), venue: "北屯店", eventName: "1200限時錦標賽", customEventName: "", buyIn: 1000, serviceFee: 200, reentryCount: 0, reentryBuyInTotal: 0, reentryServiceFeeTotal: 0, prize: 0, notes: "" };
+
+function Input({ label, value, onChange, type = "text", placeholder, min, clearZero = false }) {
+  function handleFocus() {
+    if (clearZero && String(value) === "0") onChange("");
+  }
+  function handleBlur() {
+    if (clearZero && (value === "" || value === null || value === undefined)) onChange(0);
+  }
+  return (
+    <label className="field">
+      <span>{label}</span>
+      <input
+        type={type}
+        min={min}
+        value={value}
+        placeholder={placeholder}
+        onFocus={handleFocus}
+        onBlur={handleBlur}
+        onChange={(e) => onChange(e.target.value)}
+      />
+    </label>
+  );
+}
+function Select({ label, value, onChange, children }) {
+  return <label className="field"><span>{label}</span><select value={value} onChange={(e) => onChange(e.target.value)}>{children}</select></label>;
+}
+function PillButton({ active, onClick, children }) {
+  return <button type="button" className={`pill ${active ? "active" : ""}`} onClick={onClick}>{children}</button>;
+}
+function StatCard({ title, value, sub, accent }) {
+  return <div className={`stat-card ${accent || ""}`}><div className="stat-title">{title}</div><div className="stat-value">{value}</div>{sub ? <div className="stat-sub">{sub}</div> : null}</div>;
+}
+function Toast({ message }) {
+  if (!message) return null;
+  return <div className="toast">{message}</div>;
+}
+function EmptyChart({ message }) {
+  return <div className="chart-empty">{message}</div>;
+}
+
+function dataUrlToFile(dataUrl, filename) {
+  const arr = dataUrl.split(",");
+  const mime = arr[0].match(/:(.*?);/)?.[1] || "image/png";
+  const binary = atob(arr[1]);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+  return new File([bytes], filename, { type: mime });
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+  const radius = Math.min(r, w / 2, h / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + radius, y);
+  ctx.arcTo(x + w, y, x + w, y + h, radius);
+  ctx.arcTo(x + w, y + h, x, y + h, radius);
+  ctx.arcTo(x, y + h, x, y, radius);
+  ctx.arcTo(x, y, x + w, y, radius);
+  ctx.closePath();
+}
+
+function drawWrappedText(ctx, text, x, y, maxWidth, lineHeight) {
+  const words = String(text).split("");
+  let line = "";
+  let currentY = y;
+  for (let i = 0; i < words.length; i += 1) {
+    const testLine = line + words[i];
+    if (ctx.measureText(testLine).width > maxWidth && line) {
+      ctx.fillText(line, x, currentY);
+      line = words[i];
+      currentY += lineHeight;
+    } else {
+      line = testLine;
+    }
+  }
+  if (line) ctx.fillText(line, x, currentY);
+}
+
+function createStatsShareDataUrl({ overall, cumulativeProfitData, startDate, endDate }) {
+  const canvas = document.createElement("canvas");
+  const width = 1080;
+  const height = 1440;
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext("2d");
+
+  ctx.fillStyle = "#f3f6fb";
+  ctx.fillRect(0, 0, width, height);
+
+  const gradient = ctx.createRadialGradient(860, 180, 40, 860, 180, 640);
+  gradient.addColorStop(0, "rgba(46, 107, 255, 0.16)");
+  gradient.addColorStop(1, "rgba(46, 107, 255, 0)");
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, width, height);
+
+  ctx.fillStyle = "#667085";
+  ctx.font = "700 32px system-ui, -apple-system, BlinkMacSystemFont, sans-serif";
+  ctx.fillText("Cloud Version", 70, 92);
+
+  ctx.fillStyle = "#0f172a";
+  ctx.font = "900 58px system-ui, -apple-system, BlinkMacSystemFont, sans-serif";
+  ctx.fillText("限時錦標賽記帳", 70, 160);
+
+  const rangeText = startDate || endDate ? `${startDate || "開始"} → ${endDate || "現在"}` : "全部紀錄";
+  ctx.fillStyle = "#e8fff3";
+  roundRect(ctx, 720, 92, 290, 72, 36);
+  ctx.fill();
+  ctx.fillStyle = "#067647";
+  ctx.font = "900 32px system-ui, -apple-system, BlinkMacSystemFont, sans-serif";
+  ctx.textAlign = "center";
+  ctx.fillText(signedMoney(overall.netProfit), 865, 138);
+  ctx.textAlign = "left";
+
+  function statCard(x, y, w, h, title, value, sub, dark = false) {
+    ctx.fillStyle = dark ? "#111c44" : "rgba(255,255,255,0.94)";
+    roundRect(ctx, x, y, w, h, 34);
+    ctx.fill();
+
+    ctx.fillStyle = dark ? "#cbd5e1" : "#667085";
+    ctx.font = "800 28px system-ui, -apple-system, BlinkMacSystemFont, sans-serif";
+    ctx.fillText(title, x + 36, y + 54);
+
+    ctx.fillStyle = dark ? "#ffffff" : "#0f172a";
+    ctx.font = "900 52px system-ui, -apple-system, BlinkMacSystemFont, sans-serif";
+    ctx.fillText(value, x + 36, y + 116);
+
+    if (sub) {
+      ctx.fillStyle = dark ? "#cbd5e1" : "#667085";
+      ctx.font = "700 24px system-ui, -apple-system, BlinkMacSystemFont, sans-serif";
+      ctx.fillText(sub, x + 36, y + 158);
+    }
+  }
+
+  statCard(70, 220, 450, 190, "淨利", signedMoney(overall.netProfit), `ROI ${percent(overall.roi)}`, true);
+  statCard(560, 220, 450, 190, "總場次", String(overall.totalGames), `Entries ${overall.totalEntries}`);
+  statCard(70, 440, 450, 180, "總買入", money(overall.totalCost), "買入 + 服務費");
+  statCard(560, 440, 450, 180, "總獎金", money(overall.totalPrize), "區間累積獎金");
+  statCard(70, 650, 450, 180, "服務費", money(overall.totalServiceFee), "區間累積服務費");
+  statCard(560, 650, 450, 180, "平均每場", signedMoney(overall.avgProfit), "平均淨利 / 場");
+
+  ctx.fillStyle = "rgba(255,255,255,0.95)";
+  roundRect(ctx, 70, 880, 940, 420, 42);
+  ctx.fill();
+
+  ctx.fillStyle = "#0f172a";
+  ctx.font = "900 40px system-ui, -apple-system, BlinkMacSystemFont, sans-serif";
+  ctx.fillText("累積淨利圖", 110, 945);
+
+  ctx.fillStyle = "#667085";
+  ctx.font = "700 24px system-ui, -apple-system, BlinkMacSystemFont, sans-serif";
+  ctx.fillText(rangeText, 110, 986);
+
+  const data = cumulativeProfitData || [];
+  if (data.length) {
+    const values = data.map((i) => i.cumulativeProfit);
+    const minValue = Math.min(0, ...values);
+    const maxValue = Math.max(0, ...values);
+    const range = maxValue - minValue || 1;
+    const left = 120, right = 950, top = 1040, bottom = 1220;
+    const x = (index) => data.length > 1 ? left + ((right - left) * index) / (data.length - 1) : (left + right) / 2;
+    const y = (value) => bottom - ((value - minValue) / range) * (bottom - top);
+    const zeroY = y(0);
+
+    ctx.strokeStyle = "#d4dbe8";
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(left, zeroY);
+    ctx.lineTo(right, zeroY);
+    ctx.stroke();
+
+    ctx.strokeStyle = "#0f172a";
+    ctx.lineWidth = 8;
+    ctx.lineJoin = "round";
+    ctx.lineCap = "round";
+    ctx.beginPath();
+    data.forEach((item, index) => {
+      const px = x(index);
+      const py = y(item.cumulativeProfit);
+      if (index === 0) ctx.moveTo(px, py);
+      else ctx.lineTo(px, py);
+    });
+    ctx.stroke();
+
+    const last = data[data.length - 1];
+    const maxIndex = values.indexOf(maxValue);
+    const minIndex = values.indexOf(minValue);
+    [[maxIndex, maxValue], [minIndex, minValue], [data.length - 1, last.cumulativeProfit]].forEach(([index, value]) => {
+      ctx.fillStyle = "#0f172a";
+      ctx.beginPath();
+      ctx.arc(x(index), y(value), 10, 0, Math.PI * 2);
+      ctx.fill();
+    });
+
+    ctx.fillStyle = "#667085";
+    ctx.font = "700 22px system-ui, -apple-system, BlinkMacSystemFont, sans-serif";
+    ctx.fillText(data[0]?.label || "", left, 1268);
+    ctx.textAlign = "center";
+    ctx.fillText(data[Math.floor((data.length - 1) / 2)]?.label || "", (left + right) / 2, 1268);
+    ctx.textAlign = "right";
+    ctx.fillText(data[data.length - 1]?.label || "", right, 1268);
+    ctx.textAlign = "left";
+  } else {
+    ctx.fillStyle = "#667085";
+    ctx.font = "700 30px system-ui, -apple-system, BlinkMacSystemFont, sans-serif";
+    ctx.fillText("這個區間還沒有紀錄。", 110, 1080);
+  }
+
+  ctx.fillStyle = "#667085";
+  ctx.font = "700 24px system-ui, -apple-system, BlinkMacSystemFont, sans-serif";
+  ctx.textAlign = "center";
+  ctx.fillText("限時錦標賽記帳工具", width / 2, 1360);
+  ctx.textAlign = "left";
+
+  return canvas.toDataURL("image/png");
+}
+
+function CumulativeProfitChart({ data }) {
+  if (!data.length) return <EmptyChart message="這個區間還沒有紀錄。" />;
+
+  const isMobile = typeof window !== "undefined" ? window.innerWidth < 768 : false;
+  const width = isMobile ? 360 : 680;
+  const height = isMobile ? 228 : 240;
+  const padding = { top: 22, right: 18, bottom: 34, left: 18 };
+  const values = data.map((i) => i.cumulativeProfit);
+  const minValue = Math.min(0, ...values);
+  const maxValue = Math.max(0, ...values);
+  const range = maxValue - minValue || 1;
+  const chartWidth = width - padding.left - padding.right;
+  const chartHeight = height - padding.top - padding.bottom;
+  const x = (index) => data.length > 1 ? padding.left + (chartWidth * index) / (data.length - 1) : padding.left + chartWidth / 2;
+  const y = (value) => padding.top + chartHeight - ((value - minValue) / range) * chartHeight;
+  const zeroY = y(0);
+  const points = data.map((item, index) => `${x(index)},${y(item.cumulativeProfit)}`).join(" ");
+  const last = data[data.length - 1];
+  const maxIndex = values.indexOf(maxValue);
+  const minIndex = values.indexOf(minValue);
+  const labelIndexes = Array.from(new Set([0, Math.floor((data.length - 1) / 2), data.length - 1])).sort((a, b) => a - b);
+  const showMarkerText = !isMobile;
+
+  const markers = [
+    { index: minIndex, value: minValue, text: `最低 ${signedMoney(minValue)}`, tone: "muted", position: "below" },
+    { index: maxIndex, value: maxValue, text: `最高 ${signedMoney(maxValue)}`, tone: maxValue >= 0 ? "profit" : "loss", position: "above" },
+    { index: data.length - 1, value: last.cumulativeProfit, text: `目前 ${signedMoney(last.cumulativeProfit)}`, tone: last.cumulativeProfit >= 0 ? "profit" : "loss", position: "above" },
+  ].filter((marker, index, arr) => arr.findIndex((item) => item.index === marker.index && item.value === marker.value) === index);
+
+  return (
+    <div className="chart-panel compact-chart">
+      <div className="chart-summary-row three">
+        <div className="chart-summary-pill">
+          <div className="chart-summary-label">目前累積</div>
+          <div className={last.cumulativeProfit >= 0 ? "chart-summary-value profit-text" : "chart-summary-value loss-text"}>{signedMoney(last.cumulativeProfit)}</div>
+        </div>
+        <div className="chart-summary-pill">
+          <div className="chart-summary-label">區間最高</div>
+          <div className="chart-summary-value">{signedMoney(maxValue)}</div>
+        </div>
+        <div className="chart-summary-pill">
+          <div className="chart-summary-label">區間最低</div>
+          <div className="chart-summary-value">{signedMoney(minValue)}</div>
+        </div>
+      </div>
+
+      <div className="chart-scroll no-scroll">
+        <svg viewBox={`0 0 ${width} ${height}`} className="chart-svg compact">
+          <defs>
+            <linearGradient id="cumulativeAreaFill" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="rgba(37, 99, 235, 0.18)" />
+              <stop offset="100%" stopColor="rgba(37, 99, 235, 0)" />
+            </linearGradient>
+          </defs>
+          <line x1={padding.left} x2={width - padding.right} y1={zeroY} y2={zeroY} className="axis" />
+          {data.length > 1 ? <polygon className="area-fill" points={`${padding.left},${zeroY} ${points} ${x(data.length - 1)},${zeroY}`} /> : null}
+          {data.length > 1 ? <polyline fill="none" className="line" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" points={points} /> : null}
+
+          {markers.map((marker) => {
+            const cx = x(marker.index);
+            const cy = y(marker.value);
+            const forceAbove = marker.position === "below" && cy > height - padding.bottom - 18;
+            const textY = forceAbove || marker.position !== "below"
+              ? Math.max(16, cy - 12)
+              : Math.min(height - 20, cy + 20);
+            const textAnchor = cx > width - 120 ? "end" : cx < 120 ? "start" : "middle";
+            const dx = textAnchor === "end" ? -4 : textAnchor === "start" ? 4 : 0;
+            const cls = marker.tone === "profit" ? "svg-profit" : marker.tone === "loss" ? "svg-loss" : "chart-label strong";
+            return (
+              <g key={`${marker.index}-${marker.text}`}>
+                <circle cx={cx} cy={cy} r={isMobile ? "4.5" : "5"} className="dot" />
+                {showMarkerText ? <text x={cx + dx} y={textY} textAnchor={textAnchor} className={cls}>{marker.text}</text> : null}
+              </g>
+            );
+          })}
+
+          {labelIndexes.map((index) => {
+            const anchor = index === 0 ? "start" : index === data.length - 1 ? "end" : "middle";
+            const dx = anchor === "start" ? 2 : anchor === "end" ? -2 : 0;
+            return <text key={`label-${index}`} x={x(index) + dx} y={height - 8} textAnchor={anchor} className="chart-label axis-label">{data[index]?.label}</text>;
+          })}
+        </svg>
+      </div>
+    </div>
+  );
+}
+
+function DailyProfitChart({ data }) {
+  if (!data.length) return <EmptyChart message="這個區間還沒有紀錄。" />;
+
+  const isMobile = typeof window !== "undefined" ? window.innerWidth < 768 : false;
+  const width = isMobile ? 360 : 680;
+  const height = isMobile ? 228 : 240;
+  const padding = { top: 22, right: 18, bottom: 34, left: 18 };
+  const values = data.map((i) => i.netProfit);
+  const minValue = Math.min(0, ...values);
+  const maxValue = Math.max(0, ...values);
+  const range = maxValue - minValue || 1;
+  const chartWidth = width - padding.left - padding.right;
+  const chartHeight = height - padding.top - padding.bottom;
+  const zeroY = padding.top + chartHeight - ((0 - minValue) / range) * chartHeight;
+  const barSpace = chartWidth / data.length;
+  const barWidth = Math.max(isMobile ? 4 : 8, Math.min(isMobile ? 16 : 28, barSpace * 0.58));
+  const y = (value) => padding.top + chartHeight - ((value - minValue) / range) * chartHeight;
+  const labelIndexes = Array.from(new Set([0, Math.floor((data.length - 1) / 2), data.length - 1])).sort((a, b) => a - b);
+
+  return (
+    <div className="chart-panel compact-chart">
+      <div className="chart-summary-row two">
+        <div className="chart-summary-pill">
+          <div className="chart-summary-label">單日最高</div>
+          <div className="chart-summary-value">{signedMoney(maxValue)}</div>
+        </div>
+        <div className="chart-summary-pill">
+          <div className="chart-summary-label">單日最低</div>
+          <div className="chart-summary-value">{signedMoney(minValue)}</div>
+        </div>
+      </div>
+
+      <div className="chart-scroll no-scroll">
+        <svg viewBox={`0 0 ${width} ${height}`} className="chart-svg compact">
+          <line x1={padding.left} x2={width - padding.right} y1={zeroY} y2={zeroY} className="axis" />
+          {data.map((item, index) => {
+            const centerX = padding.left + barSpace * index + barSpace / 2;
+            const valueY = y(item.netProfit);
+            const rectY = item.netProfit >= 0 ? valueY : zeroY;
+            const rectHeight = Math.max(2, Math.abs(zeroY - valueY));
+            return (
+              <g key={item.date}>
+                <rect x={centerX - barWidth / 2} y={rectY} width={barWidth} height={rectHeight} rx="5" className={item.netProfit >= 0 ? "bar-profit" : "bar-loss"} />
+                {labelIndexes.includes(index) ? (
+                  <text x={centerX + (index === 0 ? 2 : index === data.length - 1 ? -2 : 0)} y={height - 8} textAnchor={index === 0 ? "start" : index === data.length - 1 ? "end" : "middle"} className="chart-label axis-label">{item.label}</text>
+                ) : null}
+              </g>
+            );
+          })}
+        </svg>
+      </div>
+    </div>
+  );
+}
+function GroupTable({ rows }) {
+  if (!rows.length) return <div className="empty">這個區間還沒有資料。</div>;
+  return <div className="group-list">{rows.map((row) => <div className="group-row" key={row.label}><div><div className="group-label">{row.label}</div><div className="group-meta">{row.totalGames} 場｜ROI {percent(row.roi)}</div></div><div className={row.netProfit >= 0 ? "profit" : "loss"}>{signedMoney(row.netProfit)}</div></div>)}</div>;
+}
+
+
+function getBrowserContext() {
+  if (typeof navigator === "undefined") return { isInstagram: false, isIOS: false, isSafari: false, isStandalone: false };
+  const ua = navigator.userAgent || "";
+  const isInstagram = /Instagram/i.test(ua);
+  const isIOS = /iPhone|iPad|iPod/i.test(ua);
+  const isSafari = isIOS && /Safari/i.test(ua) && !/CriOS|FxiOS|EdgiOS|Instagram/i.test(ua);
+  const isStandalone = window.matchMedia?.("(display-mode: standalone)")?.matches || window.navigator.standalone === true;
+  return { isInstagram, isIOS, isSafari, isStandalone };
+}
+
+function InstallHint() {
+  const [hidden, setHidden] = useState(() => localStorage.getItem("install_hint_hidden") === "1");
+  const [copied, setCopied] = useState(false);
+  const context = getBrowserContext();
+
+  if (hidden || context.isStandalone) return null;
+  if (!context.isInstagram && !context.isSafari) return null;
+
+  async function copyUrl() {
+    try {
+      await navigator.clipboard.writeText(window.location.origin);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1600);
+    } catch {
+      window.prompt("請複製這個網址到 Safari 開啟", window.location.origin);
+    }
+  }
+
+  function dismiss() {
+    localStorage.setItem("install_hint_hidden", "1");
+    setHidden(true);
+  }
+
+  if (context.isInstagram) {
+    return (
+      <div className="install-card">
+        <div>
+          <div className="install-title">建議用 Safari 開啟</div>
+          <div className="install-text">從 IG 內建瀏覽器使用可能較容易需要重新登入。請點右上角「⋯」→「在瀏覽器開啟」。</div>
+        </div>
+        <div className="install-actions">
+          <button type="button" className="install-button" onClick={copyUrl}>{copied ? "已複製" : "複製網址"}</button>
+          <button type="button" className="install-close" onClick={dismiss}>我知道了</button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="install-card safari">
+      <div>
+        <div className="install-title">加入主畫面，像 App 一樣使用</div>
+        <div className="install-text">點 Safari 下方分享按鈕 →「加入主畫面」→「新增」。之後就能從桌面直接開啟。</div>
+      </div>
+      <div className="install-actions">
+        <button type="button" className="install-close" onClick={dismiss}>我知道了</button>
+      </div>
+    </div>
+  );
+}
+
+function OnboardingGate({ onContinue }) {
+  const context = getBrowserContext();
+  const [copied, setCopied] = useState(false);
+
+  async function copyUrl() {
+    try {
+      await navigator.clipboard.writeText(window.location.origin);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1600);
+    } catch {
+      window.prompt("請複製這個網址到 Safari 開啟", window.location.origin);
+    }
+  }
+
+  function continueAnyway() {
+    localStorage.setItem("onboarding_skip", "1");
+    onContinue();
+  }
+
+  if (context.isInstagram) {
+    return (
+      <main className="onboarding-wrap">
+        <div className="onboarding-card dark">
+          <div className="onboarding-badge">建議先不要登入</div>
+          <h1>請先用 Safari 開啟</h1>
+          <p>這個工具適合長期記錄。如果在 Instagram 內建瀏覽器登入，之後切到 Safari 或主畫面時可能會需要重新驗證。</p>
+          <div className="onboarding-steps">
+            <div><strong>1</strong><span>點右上角「⋯」</span></div>
+            <div><strong>2</strong><span>選擇「在瀏覽器開啟」</span></div>
+            <div><strong>3</strong><span>在 Safari 加入主畫面</span></div>
+            <div><strong>4</strong><span>從桌面圖示打開後建立帳號</span></div>
+          </div>
+          <button className="primary-button full" type="button" onClick={copyUrl}>{copied ? "網址已複製" : "複製網址"}</button>
+          <button className="text-button" type="button" onClick={continueAnyway}>我先直接使用</button>
+        </div>
+      </main>
+    );
+  }
+
+  if (context.isIOS && context.isSafari && !context.isStandalone) {
+    return (
+      <main className="onboarding-wrap">
+        <div className="onboarding-card">
+          <div className="onboarding-badge light">建議先加入主畫面</div>
+          <h1>像 App 一樣使用</h1>
+          <p>請先把工具加入 iPhone 主畫面。之後從桌面圖示開啟，再建立帳號或登入即可長期使用。</p>
+          <div className="onboarding-steps light">
+            <div><strong>1</strong><span>點 Safari 下方分享按鈕</span></div>
+            <div><strong>2</strong><span>選擇「加入主畫面」</span></div>
+            <div><strong>3</strong><span>按「新增」</span></div>
+            <div><strong>4</strong><span>從桌面圖示打開後建立帳號</span></div>
+          </div>
+          <button className="primary-button full" type="button" onClick={continueAnyway}>我已加入主畫面，繼續登入</button>
+          <button className="text-button dark-text" type="button" onClick={continueAnyway}>我先直接使用</button>
+        </div>
+      </main>
+    );
+  }
+
+  return null;
+}
+
+
+function LoginPage() {
+  const [mode, setMode] = useState("signin");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [working, setWorking] = useState(false);
+
+  const isSignup = mode === "signup";
+
+  async function handleAuth() {
+    if (!email || !password) {
+      alert("請輸入 Email 和密碼");
+      return;
+    }
+    if (password.length < 6) {
+      alert("密碼至少需要 6 個字元");
+      return;
+    }
+
+    try {
+      setWorking(true);
+
+      if (isSignup) {
+        const { error } = await supabase.auth.signUp({
+          email,
+          password,
+        });
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
+        if (error) throw error;
+      }
+    } catch (error) {
+      const message = String(error.message || "");
+      if (message.includes("Invalid login credentials")) {
+        alert("Email 或密碼錯誤。如果你還沒有帳號，請切換到建立帳號。");
+      } else if (message.includes("User already registered")) {
+        alert("這個 Email 已經註冊過，請切換到登入。");
+      } else {
+        alert(error.message || "操作失敗");
+      }
+    } finally {
+      setWorking(false);
+    }
+  }
+
+  async function resetPassword() {
+    if (!email) {
+      alert("請先輸入 Email");
+      return;
+    }
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: window.location.origin,
+      });
+      if (error) throw error;
+      alert("密碼重設信已寄出。注意：如果尚未設定 SMTP，可能會受 Supabase 寄信限制影響。");
+    } catch (error) {
+      alert(error.message || "寄送失敗");
+    }
+  }
+
+  return (
+    <main className="login-wrap">
+      <div className="login-glow" />
+      <div className="login-card">
+        <div className="app-kicker">Cloud Version</div>
+        <h1>限時錦標賽記帳</h1>
+        <p className="login-text">
+          使用 Email + 密碼建立帳號。資料會存在雲端，不用每次收驗證信。
+        </p>
+
+        <div className="auth-tabs">
+          <button type="button" className={mode === "signin" ? "active" : ""} onClick={() => setMode("signin")}>
+            登入
+          </button>
+          <button type="button" className={mode === "signup" ? "active" : ""} onClick={() => setMode("signup")}>
+            建立帳號
+          </button>
+        </div>
+
+        <Input label="Email" type="email" value={email} onChange={setEmail} placeholder="you@example.com" />
+        <Input label="密碼" type="password" value={password} onChange={setPassword} placeholder="至少 6 個字元" />
+
+        <button className="primary-button full" type="button" onClick={handleAuth} disabled={working || !email || !password}>
+          {working ? "處理中..." : isSignup ? "建立帳號並開始使用" : "登入"}
+        </button>
+
+        {!isSignup ? (
+          <button className="text-button dark-text" type="button" onClick={resetPassword}>
+            忘記密碼？
+          </button>
+        ) : (
+          <div className="login-note">
+            建立帳號後，之後可以用同一組 Email + 密碼在其他裝置登入。
+          </div>
+        )}
+      </div>
+    </main>
+  );
+}
+
+
+function QuickButton({ active, onClick, children }) {
+  return <button type="button" className={`quick-button ${active ? "active" : ""}`} onClick={onClick}>{children}</button>;
+}
+
+function QuickRow({ children }) {
+  return <div className="quick-row">{children}</div>;
+}
+
+function AddPage({ form, setForm, saveRecord, saving, monthSummary }) {
+  const calculatedForm = useMemo(() => calcRecord({
+    event_name: form.eventName,
+    custom_event_name: form.customEventName,
+    buy_in: form.buyIn,
+    service_fee: form.serviceFee,
+    reentry_count: form.reentryCount,
+    reentry_buyin_total: form.reentryBuyInTotal,
+    reentry_service_fee_total: form.reentryServiceFeeTotal,
+    prize: form.prize
+  }), [form]);
+
+  function updateForm(key, value) {
+    setForm((current) => ({ ...current, [key]: value }));
+  }
+
+  function applyEventName(value) {
+    const t = EVENT_TEMPLATES[value];
+    setForm((current) => ({
+      ...current,
+      eventName: value,
+      customEventName: value === "自訂名稱" ? current.customEventName : "",
+      buyIn: t ? t.buyIn : current.buyIn,
+      serviceFee: t ? t.serviceFee : current.serviceFee,
+      reentryCount: 0,
+      reentryBuyInTotal: 0,
+      reentryServiceFeeTotal: 0,
+    }));
+  }
+
+  function applyServiceDiscount(rate) {
+    const base = EVENT_TEMPLATES[form.eventName]?.serviceFee ?? toNumber(form.serviceFee);
+    updateForm("serviceFee", Math.round(base * rate));
+  }
+
+  function changeReentryCount(value) {
+    const reentryCount = Math.max(0, Math.floor(toNumber(value)));
+    setForm((current) => ({
+      ...current,
+      reentryCount,
+      reentryBuyInTotal: Math.max(0, toNumber(current.buyIn)) * reentryCount,
+      reentryServiceFeeTotal: Math.max(0, toNumber(current.serviceFee)) * reentryCount,
+    }));
+  }
+
+  const commonLevels = ["3400限時錦標賽", "6600限時錦標賽", "11000限時錦標賽"];
+
+  return (
+    <main className="page compact-page">
+      <div className="mobile-card section-card primary-section entry-card">
+        <div className="card-top">
+          <div>
+            <div className="card-heading">新增限時紀錄</div>
+            <div className="card-subtitle">先記買入也可以，獎金晚點到紀錄頁補上。</div>
+          </div>
+        </div>
+
+        <div className="form-grid">
+          <Input label="日期" type="date" value={form.date} onChange={(v) => updateForm("date", v)} />
+
+          <div className="field-group">
+            <div className="field-label">錦標賽名稱</div>
+            <QuickRow>
+              {commonLevels.map((name) => (
+                <QuickButton key={name} active={form.eventName === name} onClick={() => applyEventName(name)}>
+                  {name.replace("限時錦標賽", "")}
+                </QuickButton>
+              ))}
+            </QuickRow>
+            <Select label="完整選單" value={form.eventName} onChange={applyEventName}>
+              {EVENT_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}
+            </Select>
+          </div>
+
+          {form.eventName === "自訂名稱" ? (
+            <Input label="自訂名稱" value={form.customEventName} onChange={(v) => updateForm("customEventName", v)} />
+          ) : null}
+
+          <Input label="買入金額" type="number" min="0" value={form.buyIn} clearZero onChange={(v) => updateForm("buyIn", v)} />
+
+          <div className="field-group service-group">
+            <div className="field-label">服務費</div>
+            <QuickRow>
+              <QuickButton onClick={() => applyServiceDiscount(0.5)}>折扣 50%</QuickButton>
+              <QuickButton onClick={() => applyServiceDiscount(0)}>折扣 100%</QuickButton>
+            </QuickRow>
+            <Input label="買入服務費" type="number" min="0" value={form.serviceFee} clearZero onChange={(v) => updateForm("serviceFee", v)} />
+          </div>
+
+          <Input label="獎金 / Ticket 價值" type="number" min="0" value={form.prize} clearZero onChange={(v) => updateForm("prize", v)} />
+        </div>
+      </div>
+
+      <div className="mobile-card section-card">
+        <div className="card-top">
+          <div className="card-heading">重新買入</div>
+        </div>
+        <div className="hint">重買可以先輸入次數，系統會帶入預估金額；折扣可以再手動改總額。</div>
+        <div className="form-grid">
+          <Input label="重買次數" type="number" min="0" value={form.reentryCount} clearZero onChange={changeReentryCount} />
+          <Input label="重買買入總額" type="number" min="0" value={form.reentryBuyInTotal} clearZero onChange={(v) => updateForm("reentryBuyInTotal", v)} />
+          <Input label="重買服務費總額" type="number" min="0" value={form.reentryServiceFeeTotal} clearZero onChange={(v) => updateForm("reentryServiceFeeTotal", v)} />
+        </div>
+      </div>
+
+      <div className="mobile-card section-card">
+        <div className="card-heading">備註</div>
+        <Input label="備註" value={form.notes} onChange={(v) => updateForm("notes", v)} placeholder="例如：先記買入、獎金晚點補" />
+      </div>
+
+      <div className="sticky-preview slim">
+        <div>
+          <div className="preview-main">{calculatedForm.netProfit >= 0 ? "盈利" : "虧損"} {signedMoney(calculatedForm.netProfit)}</div>
+          <div className="preview-sub">買入含服務費 {money(calculatedForm.totalCost)}</div>
+        </div>
+        <button className="primary-button save-button" type="button" onClick={saveRecord} disabled={saving}>
+          {saving ? "儲存中..." : "儲存"}
+        </button>
+      </div>
+    </main>
+  );
+}
+
+
+function StatsPage({ records }) {
+  const [rangePreset, setRangePreset] = useState("month");
+  const [sharing, setSharing] = useState(false);
+  const [startDate, setStartDate] = useState(startOfCurrentMonthString());
+  const [endDate, setEndDate] = useState(todayString());
+  const filteredRecords = useMemo(() => filterRecordsByDate(records, startDate, endDate), [records, startDate, endDate]);
+  const overall = useMemo(() => sumRecords(filteredRecords), [filteredRecords]);
+  const byEventName = useMemo(() => groupBy(filteredRecords, (r) => r.displayEventName), [filteredRecords]);
+  const dailyProfitData = useMemo(() => makeDailyProfitData(filteredRecords), [filteredRecords]);
+  const cumulativeProfitData = useMemo(() => makeCumulativeProfitData(filteredRecords), [filteredRecords]);
+
+  function applyRangePreset(preset) {
+    setRangePreset(preset);
+    const today = todayString();
+    if (preset === "all") { setStartDate(""); setEndDate(""); }
+    else if (preset === "week") { setStartDate(startOfCurrentWeekString()); setEndDate(today); }
+    else if (preset === "month") { setStartDate(startOfCurrentMonthString()); setEndDate(today); }
+    else if (preset === "30days") { setStartDate(daysAgoString(29)); setEndDate(today); }
+    else { if (!startDate) setStartDate(today); if (!endDate) setEndDate(today); }
+  }
+
+  async function shareStatsImage() {
+    if (sharing) return;
+
+    try {
+      setSharing(true);
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+
+      const dataUrl = createStatsShareDataUrl({ overall, cumulativeProfitData, startDate, endDate });
+      const file = dataUrlToFile(dataUrl, `限時錦標賽統計-${todayString()}.png`);
+
+      if (navigator.canShare?.({ files: [file] })) {
+        await navigator.share({
+          title: "限時錦標賽記帳統計",
+          text: `我的限時錦標賽統計：${signedMoney(overall.netProfit)}`,
+          files: [file],
+        });
+      } else {
+        const link = document.createElement("a");
+        link.href = dataUrl;
+        link.download = file.name;
+        link.click();
+        alert("已產生統計圖片。若沒有跳出分享面板，請從相簿或下載檔分享到 LINE。");
+      }
+    } catch (error) {
+      if (error?.name !== "AbortError") {
+        alert(error.message || "產生分享圖片失敗，請稍後再試");
+      }
+    } finally {
+      setSharing(false);
+    }
+  }
+
+  return (
+    <main className="page share-page">
+      <section className="stats-header">
+        <div>
+          <div className="hero-kicker">統計</div>
+          <h2>區間淨利</h2>
+        </div>
+        <div className="stats-header-actions">
+          <strong className={overall.netProfit >= 0 ? "profit" : "loss"}>{signedMoney(overall.netProfit)}</strong>
+          <button className="share-button" type="button" onClick={shareStatsImage} disabled={sharing}>
+            {sharing ? "產生中..." : "分享"}
+          </button>
+        </div>
+      </section>
+
+      <div className="range-row no-scroll">
+        <PillButton active={rangePreset === "all"} onClick={() => applyRangePreset("all")}>全部</PillButton>
+        <PillButton active={rangePreset === "week"} onClick={() => applyRangePreset("week")}>本週</PillButton>
+        <PillButton active={rangePreset === "month"} onClick={() => applyRangePreset("month")}>本月</PillButton>
+        <PillButton active={rangePreset === "30days"} onClick={() => applyRangePreset("30days")}>近30天</PillButton>
+      </div>
+
+      <div className="mobile-card">
+        <div className="form-grid two">
+          <Input label="開始日期" type="date" value={startDate} onChange={(v) => { setRangePreset("custom"); setStartDate(v); }} />
+          <Input label="結束日期" type="date" value={endDate} onChange={(v) => { setRangePreset("custom"); setEndDate(v); }} />
+        </div>
+      </div>
+
+      <div className="stats-grid fixed polished">
+        <StatCard title="淨利" value={signedMoney(overall.netProfit)} sub={`ROI ${percent(overall.roi)}`} accent="dark" />
+        <StatCard title={<>總買入<span className="muted-inline">（含服務費）</span></>} value={money(overall.totalCost)} sub="買入 + 服務費" />
+        <StatCard title="總獎金" value={money(overall.totalPrize)} sub="區間累積獎金" />
+        <StatCard title="服務費" value={money(overall.totalServiceFee)} sub="區間累積服務費" />
+        <StatCard title="平均每場" value={signedMoney(overall.avgProfit)} sub="平均淨利 / 場" />
+        <StatCard title="總場次" value={`${overall.totalGames}`} sub="已紀錄場次" />
+      </div>
+
+      <div className="mobile-card chart-card premium">
+        <div className="chart-topbar">
+          <div>
+            <div className="card-heading">累積淨利圖</div>
+            <div className="hint">看整段走勢變化，快速掌握目前、最高與最低位置。</div>
+          </div>
+          <div className="chart-range-badge">{startDate || "全部"} {endDate ? `→ ${endDate}` : ""}</div>
+        </div>
+        <CumulativeProfitChart data={cumulativeProfitData} />
+      </div>
+      <div className="mobile-card chart-card premium">
+        <div className="chart-topbar">
+          <div>
+            <div className="card-heading">每日盈虧圖</div>
+            <div className="hint">同一天多場會合併為單日淨利。</div>
+          </div>
+          <div className="chart-range-badge subtle">按日期彙總</div>
+        </div>
+        <DailyProfitChart data={dailyProfitData} />
+      </div>
+      <details className="mobile-card details-card" open>
+        <summary>依賽事名稱統計</summary>
+        <GroupTable rows={byEventName} />
+      </details>
+    </main>
+  );
+}
+
+
+function RecordsPage({ records, removeRecord, updateRecord }) {
+  const [editingId, setEditingId] = useState(null);
+  const [draft, setDraft] = useState(null);
+  const [savingEdit, setSavingEdit] = useState(false);
+
+  function startEdit(record) {
+    setEditingId(record.id);
+    setDraft({
+      prize: record.prize,
+      notes: record.notes || "",
+      buy_in: record.buyIn,
+      service_fee: record.serviceFee,
+      reentry_count: record.reentryCount,
+      reentry_buyin_total: record.reentryBuyInTotal,
+      reentry_service_fee_total: record.reentryServiceFeeTotal,
+    });
+  }
+
+  function cancelEdit() {
+    setEditingId(null);
+    setDraft(null);
+  }
+
+  async function saveEdit(id) {
+    try {
+      setSavingEdit(true);
+      await updateRecord(id, draft);
+      cancelEdit();
+    } finally {
+      setSavingEdit(false);
+    }
+  }
+
+  return (
+    <main className="page">
+      <section className="stats-header">
+        <div>
+          <div className="hero-kicker">紀錄</div>
+          <h2>補獎金 / 修改紀錄</h2>
+        </div>
+        <strong>{records.length}</strong>
+      </section>
+
+      {records.length === 0 ? (
+        <div className="empty big">還沒有紀錄。先新增一場。</div>
+      ) : (
+        <div className="record-list">
+          {records.map((record) => (
+            <div className="record-card" key={record.id}>
+              <div className="record-top">
+                <div>
+                  <div className="record-title">{record.displayEventName}</div>
+                  <div className="record-meta">{record.date}</div>
+                </div>
+                <div className="record-actions">
+                  <button className="edit-button" type="button" onClick={() => startEdit(record)}>編輯</button>
+                  <button className="delete-button" type="button" onClick={() => removeRecord(record.id)}>刪除</button>
+                </div>
+              </div>
+
+              {editingId === record.id ? (
+                <div className="edit-panel">
+                  <div className="form-grid two">
+                    <Input label="獎金 / Ticket 價值" type="number" min="0" value={draft.prize} clearZero onChange={(v) => setDraft((d) => ({ ...d, prize: v }))} />
+                    <Input label="買入服務費" type="number" min="0" value={draft.service_fee} clearZero onChange={(v) => setDraft((d) => ({ ...d, service_fee: v }))} />
+                    <Input label="買入金額" type="number" min="0" value={draft.buy_in} clearZero onChange={(v) => setDraft((d) => ({ ...d, buy_in: v }))} />
+                    <Input label="重買次數" type="number" min="0" value={draft.reentry_count} clearZero onChange={(v) => setDraft((d) => ({ ...d, reentry_count: v }))} />
+                    <Input label="重買買入總額" type="number" min="0" value={draft.reentry_buyin_total} clearZero onChange={(v) => setDraft((d) => ({ ...d, reentry_buyin_total: v }))} />
+                    <Input label="重買服務費總額" type="number" min="0" value={draft.reentry_service_fee_total} clearZero onChange={(v) => setDraft((d) => ({ ...d, reentry_service_fee_total: v }))} />
+                  </div>
+                  <Input label="備註" value={draft.notes} onChange={(v) => setDraft((d) => ({ ...d, notes: v }))} />
+                  <div className="edit-actions">
+                    <button className="secondary-button" type="button" onClick={cancelEdit}>取消</button>
+                    <button className="primary-button small" type="button" onClick={() => saveEdit(record.id)} disabled={savingEdit}>
+                      {savingEdit ? "儲存中..." : "儲存修改"}
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <div className="record-numbers">
+                    <div><span>買入含服務費</span><strong>{money(record.totalCost)}</strong></div>
+                    <div><span>獎金</span><strong>{money(record.prize)}</strong></div>
+                    <div><span>淨利</span><strong className={record.netProfit >= 0 ? "profit" : "loss"}>{signedMoney(record.netProfit)}</strong></div>
+                  </div>
+                  <div className="record-small">Entries {record.entries}｜重買 {record.reentryCount}｜服務費 {money(record.totalServiceFee)}｜ROI {percent(record.roi)}</div>
+                  {record.notes ? <div className="record-note">{record.notes}</div> : null}
+                </>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </main>
+  );
+}
+
+
+function DataPage({ records, signOut }) {
+  function exportBackup() {
+    downloadText(`限時錦標賽備份_${todayString()}.json`, JSON.stringify({ app: "limited-tournament-tracker-cloud", version: 2, exportedAt: new Date().toISOString(), records }, null, 2));
+  }
+  function exportCsv() {
+    const headers = ["日期","賽事名稱","買入金額","買入服務費","重買次數","重買買入總額","重買服務費總額","總Entries","總買入","獎金","淨利","ROI","備註"];
+    const rows = records.map((record) => [record.date,record.displayEventName,record.buyIn,record.serviceFee,record.reentryCount,record.reentryBuyInTotal,record.reentryServiceFeeTotal,record.entries,record.totalBuyIn,record.prize,record.netProfit,`${record.roi.toFixed(1)}%`,record.notes]);
+    const csv = [headers, ...rows].map((row) => row.map((cell) => `"${String(cell ?? "").replace(/"/g, '""')}"`).join(",")).join("\n");
+    downloadText(`限時錦標賽紀錄_${todayString()}.csv`, "\ufeff" + csv, "text/csv;charset=utf-8");
+  }
+  return <main className="page"><section className="hero-panel compact"><div><div className="hero-kicker">資料</div><h2>你的資料現在已經在雲端</h2></div></section><div className="mobile-card warning-card"><div className="card-heading">建議保留額外備份</div><p>雖然這版已經使用 Supabase 雲端儲存，仍建議定期匯出 JSON 或 CSV，讓你更安心。</p></div><div className="mobile-card action-list"><button type="button" className="action-button" onClick={exportBackup}>備份 JSON</button><button type="button" className="action-button" onClick={exportCsv}>匯出 CSV</button><button type="button" className="danger-button" onClick={signOut}>登出</button></div></main>;
+}
+
+
+function LoadingFallback({ message = "載入中...", onReset }) {
+  return (
+    <main className="loading-wrap">
+      <div className="loading-card">
+        <div className="loading-spinner" />
+        <h1>{message}</h1>
+        <p>如果畫面停在這裡太久，可能是登入狀態或瀏覽器快取卡住。</p>
+        {onReset ? (
+          <button className="primary-button full" type="button" onClick={onReset}>
+            清除登入狀態並重新整理
+          </button>
+        ) : null}
+      </div>
+    </main>
+  );
+}
+
+export default function App() {
+  const [session, setSession] = useState(null);
+  const [records, setRecords] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [authError, setAuthError] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [tab, setTab] = useState("add");
+  const [toast, setToast] = useState("");
+  const [form, setForm] = useState(defaultForm);
+
+  useEffect(() => {
+    let mounted = true;
+    const timeout = setTimeout(() => {
+      if (!mounted) return;
+      setAuthError("登入狀態讀取逾時");
+      setLoading(false);
+    }, 7000);
+
+    supabase.auth.getSession()
+      .then(({ data, error }) => {
+        if (!mounted) return;
+        if (error) setAuthError(error.message || "登入狀態讀取失敗");
+        setSession(data?.session ?? null);
+      })
+      .catch((error) => {
+        if (!mounted) return;
+        setAuthError(error.message || "登入狀態讀取失敗");
+      })
+      .finally(() => {
+        if (!mounted) return;
+        clearTimeout(timeout);
+        setLoading(false);
+      });
+
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session ?? null);
+      setAuthError("");
+    });
+
+    return () => {
+      mounted = false;
+      clearTimeout(timeout);
+      listener.subscription.unsubscribe();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!session?.user) { setRecords([]); return; }
+    loadRecords();
+  }, [session?.user?.id]);
+
+  useEffect(() => {
+    if (!toast) return;
+    const timer = setTimeout(() => setToast(""), 2200);
+    return () => clearTimeout(timer);
+  }, [toast]);
+
+  async function loadRecords() {
+    try {
+      setLoading(true);
+      const { data, error } = await supabase.from("tournament_records").select("*").order("date", { ascending: false }).order("created_at", { ascending: false });
+      if (error) throw error;
+      setRecords((data || []).map(calcRecord));
+    } catch (error) {
+      alert(error.message || "讀取失敗");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function saveRecord() {
+    try {
+      setSaving(true);
+      const payload = {
+        user_id: session.user.id,
+        date: form.date,
+        venue: "",
+        event_name: form.eventName,
+        custom_event_name: form.eventName === "自訂名稱" ? form.customEventName : "",
+        buy_in: toNumber(form.buyIn),
+        service_fee: toNumber(form.serviceFee),
+        reentry_count: toNumber(form.reentryCount),
+        reentry_buyin_total: toNumber(form.reentryBuyInTotal),
+        reentry_service_fee_total: toNumber(form.reentryServiceFeeTotal),
+        prize: toNumber(form.prize),
+        notes: form.notes || "",
+      };
+      const { error } = await supabase.from("tournament_records").insert(payload);
+      if (error) throw error;
+      setForm((current) => ({ ...defaultForm, date: todayString(), venue: current.venue, eventName: current.eventName, customEventName: current.eventName === "自訂名稱" ? current.customEventName : "", buyIn: current.buyIn, serviceFee: current.serviceFee }));
+      await loadRecords();
+      setToast("已儲存到雲端");
+      setTab("stats");
+    } catch (error) {
+      alert(error.message || "儲存失敗");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function removeRecord(id) {
+    if (!window.confirm("確定刪除這筆紀錄？")) return;
+    try {
+      const { error } = await supabase.from("tournament_records").delete().eq("id", id);
+      if (error) throw error;
+      setRecords((current) => current.filter((record) => record.id !== id));
+      setToast("已刪除紀錄");
+    } catch (error) {
+      alert(error.message || "刪除失敗");
+    }
+  }
+
+  async function updateRecord(id, draft) {
+    try {
+      const payload = {
+        prize: toNumber(draft.prize),
+        notes: draft.notes || "",
+        buy_in: toNumber(draft.buy_in),
+        service_fee: toNumber(draft.service_fee),
+        reentry_count: toNumber(draft.reentry_count),
+        reentry_buyin_total: toNumber(draft.reentry_buyin_total),
+        reentry_service_fee_total: toNumber(draft.reentry_service_fee_total),
+      };
+      const { error } = await supabase.from("tournament_records").update(payload).eq("id", id);
+      if (error) throw error;
+      await loadRecords();
+      setToast("已更新紀錄");
+    } catch (error) {
+      alert(error.message || "更新失敗");
+      throw error;
+    }
+  }
+
+  async function signOut() {
+    await supabase.auth.signOut();
+  }
+
+  function resetLocalAuth() {
+    try {
+      localStorage.clear();
+      sessionStorage.clear();
+    } catch {}
+    window.location.reload();
+  }
+
+  const monthRecords = useMemo(() => filterRecordsByDate(records, startOfCurrentMonthString(), todayString()), [records]);
+  const monthSummary = useMemo(() => sumRecords(monthRecords), [monthRecords]);
+
+  if (loading && !session) return <LoadingFallback message="載入中..." />;
+  if (authError && !session) return <LoadingFallback message={authError} onReset={resetLocalAuth} />;
+  if (!session) {
+    const context = getBrowserContext();
+    const skipped = localStorage.getItem("onboarding_skip") === "1";
+    const shouldShowOnboarding = !skipped && (context.isInstagram || (context.isIOS && context.isSafari && !context.isStandalone));
+    if (shouldShowOnboarding) {
+      return <OnboardingGate onContinue={() => setToast("可以先登入，之後建議從主畫面使用")} />;
+    }
+    return <LoginPage />;
+  }
+
+  return <div className="app-shell"><div className="bg-orb orb-a" /><div className="bg-orb orb-b" /><header className="app-header"><div><div className="app-kicker">Cloud Version</div><h1>限時錦標賽記帳</h1></div><div className={monthSummary.netProfit >= 0 ? "header-profit profit" : "header-profit loss"}>本月 {signedMoney(monthSummary.netProfit)}</div></header>{loading ? <LoadingFallback message="同步資料中..." /> : null}{!loading && tab === "add" ? <AddPage form={form} setForm={setForm} saveRecord={saveRecord} saving={saving} monthSummary={monthSummary} /> : null}{!loading && tab === "stats" ? <StatsPage records={records} /> : null}{!loading && tab === "records" ? <RecordsPage records={records} removeRecord={removeRecord} updateRecord={updateRecord} /> : null}{!loading && tab === "data" ? <DataPage records={records} signOut={signOut} /> : null}<nav className="bottom-nav"><button className={tab === "add" ? "active" : ""} onClick={() => setTab("add")}>＋<span>新增</span></button><button className={tab === "stats" ? "active" : ""} onClick={() => setTab("stats")}>▦<span>統計</span></button><button className={tab === "records" ? "active" : ""} onClick={() => setTab("records")}>≡<span>紀錄</span></button><button className={tab === "data" ? "active" : ""} onClick={() => setTab("data")}>⇅<span>資料</span></button></nav><Toast message={toast} /></div>;
+}
