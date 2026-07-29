@@ -382,8 +382,10 @@ function CumulativeProfitChart({ data }) {
   const height = isMobile ? 228 : 240;
   const padding = { top: 20, right: 18, bottom: 34, left: isMobile ? 66 : 62 };
   const values = data.map((i) => i.cumulativeProfit);
-  const rawMinValue = Math.min(0, ...values);
-  const rawMaxValue = Math.max(0, ...values);
+  const actualMinValue = Math.min(...values);
+  const actualMaxValue = Math.max(...values);
+  const rawMinValue = Math.min(0, actualMinValue);
+  const rawMaxValue = Math.max(0, actualMaxValue);
   const yTicks = makeYAxisTicks(rawMinValue, rawMaxValue, isMobile ? 4 : 5);
   const minValue = Math.min(...yTicks);
   const maxValue = Math.max(...yTicks);
@@ -395,16 +397,16 @@ function CumulativeProfitChart({ data }) {
   const zeroY = y(0);
   const points = data.map((item, index) => `${x(index)},${y(item.cumulativeProfit)}`).join(" ");
   const last = data[data.length - 1];
-  const maxIndex = values.indexOf(maxValue);
-  const minIndex = values.indexOf(minValue);
+  const maxIndex = values.indexOf(actualMaxValue);
+  const minIndex = values.indexOf(actualMinValue);
   const labelIndexes = Array.from(new Set([0, Math.floor((data.length - 1) / 2), data.length - 1])).sort((a, b) => a - b);
   const showMarkerText = !isMobile;
 
   const markerSource = isMobile
     ? [{ index: data.length - 1, value: last.cumulativeProfit, text: `目前 ${signedMoney(last.cumulativeProfit)}`, tone: last.cumulativeProfit >= 0 ? "profit" : "loss", position: "above" }]
     : [
-        { index: minIndex, value: minValue, text: `最低 ${signedMoney(minValue)}`, tone: "muted", position: "below" },
-        { index: maxIndex, value: maxValue, text: `最高 ${signedMoney(maxValue)}`, tone: maxValue >= 0 ? "profit" : "loss", position: "above" },
+        { index: minIndex, value: actualMinValue, text: `最低 ${signedMoney(actualMinValue)}`, tone: "muted", position: "below" },
+        { index: maxIndex, value: actualMaxValue, text: `最高 ${signedMoney(actualMaxValue)}`, tone: actualMaxValue >= 0 ? "profit" : "loss", position: "above" },
         { index: data.length - 1, value: last.cumulativeProfit, text: `目前 ${signedMoney(last.cumulativeProfit)}`, tone: last.cumulativeProfit >= 0 ? "profit" : "loss", position: "above" },
       ];
   const markers = markerSource.filter((marker, index, arr) => arr.findIndex((item) => item.index === marker.index && item.value === marker.value) === index);
@@ -418,11 +420,11 @@ function CumulativeProfitChart({ data }) {
         </div>
         <div className="chart-summary-pill">
           <div className="chart-summary-label">區間最高</div>
-          <div className="chart-summary-value">{signedMoney(maxValue)}</div>
+          <div className="chart-summary-value">{signedMoney(actualMaxValue)}</div>
         </div>
         <div className="chart-summary-pill">
           <div className="chart-summary-label">區間最低</div>
-          <div className="chart-summary-value">{signedMoney(minValue)}</div>
+          <div className="chart-summary-value">{signedMoney(actualMinValue)}</div>
         </div>
       </div>
 
@@ -1251,8 +1253,10 @@ function PublicSharePageContent({ snapshot, loading, error }) {
   const leftPad = 92;
   const rightPad = 36;
   const values = chartData.map((i) => toNumber(i.value ?? i.cumulativeProfit));
-  const rawMinValue = Math.min(0, ...values);
-  const rawMaxValue = Math.max(0, ...values);
+  const actualMinValue = Math.min(...values);
+  const actualMaxValue = Math.max(...values);
+  const rawMinValue = Math.min(0, actualMinValue);
+  const rawMaxValue = Math.max(0, actualMaxValue);
   const yTicks = makeYAxisTicks(rawMinValue, rawMaxValue, 5);
   const minValue = Math.min(...yTicks);
   const maxValue = Math.max(...yTicks);
@@ -1305,7 +1309,7 @@ function PublicSharePageContent({ snapshot, loading, error }) {
                 </g>
               ))}
               {chartData.length > 1 ? <polyline fill="none" className="line" strokeWidth="7" strokeLinecap="round" strokeLinejoin="round" points={points} /> : null}
-              {chartData.map((item, index) => index === 0 || index === chartData.length - 1 || toNumber(item.value ?? item.cumulativeProfit) === maxValue || toNumber(item.value ?? item.cumulativeProfit) === minValue ? (
+              {chartData.map((item, index) => index === 0 || index === chartData.length - 1 || toNumber(item.value ?? item.cumulativeProfit) === actualMaxValue || toNumber(item.value ?? item.cumulativeProfit) === actualMinValue ? (
                 <circle key={index} cx={x(index)} cy={y(toNumber(item.value ?? item.cumulativeProfit))} r="8" className="dot" />
               ) : null)}
               <text x={leftPad} y={height - 8} textAnchor="start" className="chart-label axis-label">{chartData[0]?.label || ""}</text>
