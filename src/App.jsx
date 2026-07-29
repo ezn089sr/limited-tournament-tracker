@@ -128,26 +128,129 @@ function EmptyChart({ message }) {
 }
 function CumulativeProfitChart({ data }) {
   if (!data.length) return <EmptyChart message="這個區間還沒有紀錄。" />;
-  const width = 680, height = 220, padding = 30;
+
+  const isMobile = typeof window !== "undefined" ? window.innerWidth < 768 : false;
+  const width = isMobile ? 360 : 680;
+  const height = isMobile ? 228 : 240;
+  const padding = { top: 22, right: 18, bottom: 34, left: 18 };
   const values = data.map((i) => i.cumulativeProfit);
-  const minValue = Math.min(0, ...values), maxValue = Math.max(0, ...values), range = maxValue - minValue || 1;
-  const xStep = data.length > 1 ? (width - padding * 2) / (data.length - 1) : 0;
-  const y = (value) => height - padding - ((value - minValue) / range) * (height - padding * 2);
-  const x = (index) => data.length > 1 ? padding + xStep * index : width / 2;
+  const minValue = Math.min(0, ...values);
+  const maxValue = Math.max(0, ...values);
+  const range = maxValue - minValue || 1;
+  const chartWidth = width - padding.left - padding.right;
+  const chartHeight = height - padding.top - padding.bottom;
+  const x = (index) => data.length > 1 ? padding.left + (chartWidth * index) / (data.length - 1) : padding.left + chartWidth / 2;
+  const y = (value) => padding.top + chartHeight - ((value - minValue) / range) * chartHeight;
   const zeroY = y(0);
   const points = data.map((item, index) => `${x(index)},${y(item.cumulativeProfit)}`).join(" ");
   const last = data[data.length - 1];
-  return <div className="chart-scroll"><svg viewBox={`0 0 ${width} ${height}`} className="chart-svg"><line x1={padding} x2={width - padding} y1={zeroY} y2={zeroY} className="axis" /><text x={padding} y={20} className="chart-label">最高 {money(maxValue)}</text><text x={padding} y={height - 8} className="chart-label">最低 {money(minValue)}</text>{data.length > 1 ? <polyline fill="none" className="line" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" points={points} /> : null}{data.map((item, index) => <g key={`${item.date}-${index}`}><circle cx={x(index)} cy={y(item.cumulativeProfit)} r="3.5" className="dot" />{(index === 0 || index === data.length - 1 || data.length <= 6) ? <text x={x(index)} y={height - 12} textAnchor="middle" className="chart-label">{item.label}</text> : null}</g>)}<text x={width - padding} y={20} textAnchor="end" className={last.cumulativeProfit >= 0 ? "svg-profit" : "svg-loss"}>目前 {signedMoney(last.cumulativeProfit)}</text></svg></div>;
+  const maxIndex = values.indexOf(maxValue);
+  const minIndex = values.indexOf(minValue);
+  const labelIndexes = Array.from(new Set([0, Math.floor((data.length - 1) / 2), data.length - 1])).sort((a, b) => a - b);
+
+  const markers = [
+    { index: minIndex, value: minValue, text: `最低 ${signedMoney(minValue)}`, tone: "muted", position: "below" },
+    { index: maxIndex, value: maxValue, text: `最高 ${signedMoney(maxValue)}`, tone: maxValue >= 0 ? "profit" : "loss", position: "above" },
+    { index: data.length - 1, value: last.cumulativeProfit, text: `目前 ${signedMoney(last.cumulativeProfit)}`, tone: last.cumulativeProfit >= 0 ? "profit" : "loss", position: "above" },
+  ].filter((marker, index, arr) => arr.findIndex((item) => item.index === marker.index && item.value === marker.value) === index);
+
+  return (
+    <div className="chart-panel compact-chart">
+      <div className="chart-summary-row three">
+        <div className="chart-summary-pill">
+          <div className="chart-summary-label">目前累積</div>
+          <div className={last.cumulativeProfit >= 0 ? "chart-summary-value profit-text" : "chart-summary-value loss-text"}>{signedMoney(last.cumulativeProfit)}</div>
+        </div>
+        <div className="chart-summary-pill">
+          <div className="chart-summary-label">區間最高</div>
+          <div className="chart-summary-value">{signedMoney(maxValue)}</div>
+        </div>
+        <div className="chart-summary-pill">
+          <div className="chart-summary-label">區間最低</div>
+          <div className="chart-summary-value">{signedMoney(minValue)}</div>
+        </div>
+      </div>
+
+      <div className="chart-scroll no-scroll">
+        <svg viewBox={`0 0 ${width} ${height}`} className="chart-svg compact">
+          <line x1={padding.left} x2={width - padding.right} y1={zeroY} y2={zeroY} className="axis" />
+          {data.length > 1 ? <polyline fill="none" className="line" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" points={points} /> : null}
+
+          {markers.map((marker) => {
+            const cx = x(marker.index);
+            const cy = y(marker.value);
+            const textY = marker.position === "below" ? Math.min(height - 8, cy + 22) : Math.max(14, cy - 12);
+            const textAnchor = cx > width - 110 ? "end" : cx < 110 ? "start" : "middle";
+            const dx = textAnchor === "end" ? -2 : textAnchor === "start" ? 2 : 0;
+            const cls = marker.tone === "profit" ? "svg-profit" : marker.tone === "loss" ? "svg-loss" : "chart-label strong";
+            return (
+              <g key={`${marker.index}-${marker.text}`}>
+                <circle cx={cx} cy={cy} r="5" className="dot" />
+                <text x={cx + dx} y={textY} textAnchor={textAnchor} className={cls}>{marker.text}</text>
+              </g>
+            );
+          })}
+
+          {labelIndexes.map((index) => (
+            <text key={`label-${index}`} x={x(index)} y={height - 8} textAnchor="middle" className="chart-label axis-label">{data[index]?.label}</text>
+          ))}
+        </svg>
+      </div>
+    </div>
+  );
 }
+
 function DailyProfitChart({ data }) {
   if (!data.length) return <EmptyChart message="這個區間還沒有紀錄。" />;
-  const width = 680, height = 220, padding = 30;
+
+  const isMobile = typeof window !== "undefined" ? window.innerWidth < 768 : false;
+  const width = isMobile ? 360 : 680;
+  const height = isMobile ? 228 : 240;
+  const padding = { top: 22, right: 18, bottom: 34, left: 18 };
   const values = data.map((i) => i.netProfit);
-  const minValue = Math.min(0, ...values), maxValue = Math.max(0, ...values), range = maxValue - minValue || 1;
-  const zeroY = height - padding - ((0 - minValue) / range) * (height - padding * 2);
-  const barSpace = (width - padding * 2) / data.length, barWidth = Math.max(8, Math.min(38, barSpace * 0.62));
-  const y = (value) => height - padding - ((value - minValue) / range) * (height - padding * 2);
-  return <div className="chart-scroll"><svg viewBox={`0 0 ${width} ${height}`} className="chart-svg"><line x1={padding} x2={width - padding} y1={zeroY} y2={zeroY} className="axis" /><text x={padding} y={20} className="chart-label">最高 {money(maxValue)}</text><text x={padding} y={height - 8} className="chart-label">最低 {money(minValue)}</text>{data.map((item, index) => { const centerX = padding + barSpace * index + barSpace / 2; const valueY = y(item.netProfit); const rectY = item.netProfit >= 0 ? valueY : zeroY; const rectHeight = Math.max(2, Math.abs(zeroY - valueY)); return <g key={item.date}><rect x={centerX - barWidth / 2} y={rectY} width={barWidth} height={rectHeight} rx="5" className={item.netProfit >= 0 ? "bar-profit" : "bar-loss"} />{(index === 0 || index === data.length - 1 || data.length <= 7) ? <text x={centerX} y={height - 12} textAnchor="middle" className="chart-label">{item.label}</text> : null}</g>; })}</svg></div>;
+  const minValue = Math.min(0, ...values);
+  const maxValue = Math.max(0, ...values);
+  const range = maxValue - minValue || 1;
+  const chartWidth = width - padding.left - padding.right;
+  const chartHeight = height - padding.top - padding.bottom;
+  const zeroY = padding.top + chartHeight - ((0 - minValue) / range) * chartHeight;
+  const barSpace = chartWidth / data.length;
+  const barWidth = Math.max(isMobile ? 4 : 8, Math.min(isMobile ? 16 : 28, barSpace * 0.58));
+  const y = (value) => padding.top + chartHeight - ((value - minValue) / range) * chartHeight;
+  const labelIndexes = Array.from(new Set([0, Math.floor((data.length - 1) / 2), data.length - 1])).sort((a, b) => a - b);
+
+  return (
+    <div className="chart-panel compact-chart">
+      <div className="chart-summary-row two">
+        <div className="chart-summary-pill">
+          <div className="chart-summary-label">單日最高</div>
+          <div className="chart-summary-value">{signedMoney(maxValue)}</div>
+        </div>
+        <div className="chart-summary-pill">
+          <div className="chart-summary-label">單日最低</div>
+          <div className="chart-summary-value">{signedMoney(minValue)}</div>
+        </div>
+      </div>
+
+      <div className="chart-scroll no-scroll">
+        <svg viewBox={`0 0 ${width} ${height}`} className="chart-svg compact">
+          <line x1={padding.left} x2={width - padding.right} y1={zeroY} y2={zeroY} className="axis" />
+          {data.map((item, index) => {
+            const centerX = padding.left + barSpace * index + barSpace / 2;
+            const valueY = y(item.netProfit);
+            const rectY = item.netProfit >= 0 ? valueY : zeroY;
+            const rectHeight = Math.max(2, Math.abs(zeroY - valueY));
+            return (
+              <g key={item.date}>
+                <rect x={centerX - barWidth / 2} y={rectY} width={barWidth} height={rectHeight} rx="5" className={item.netProfit >= 0 ? "bar-profit" : "bar-loss"} />
+                {labelIndexes.includes(index) ? <text x={centerX} y={height - 8} textAnchor="middle" className="chart-label axis-label">{item.label}</text> : null}
+              </g>
+            );
+          })}
+        </svg>
+      </div>
+    </div>
+  );
 }
 function GroupTable({ rows }) {
   if (!rows.length) return <div className="empty">這個區間還沒有資料。</div>;

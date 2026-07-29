@@ -97,3 +97,11 @@ npm run dev
 - 點擊 Supabase recovery email 回到 App 後，會顯示「設定新密碼」頁
 - 使用 supabase.auth.updateUser({ password }) 更新密碼
 - 更新完成後會登出，讓使用者用新密碼重新登入
+
+
+## v15 Mobile Chart Refinement
+- 手機版累積淨利圖取消橫向滑動
+- 加入「目前累積 / 區間最高 / 區間最低」摘要
+- 圖上僅保留起點 / 中段 / 終點日期
+- 避免最低點標籤與日期重疊
+- 每日盈虧圖同步改為手機友善寬度

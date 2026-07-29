@@ -131,11 +131,15 @@ h2{margin:4px 0 0;font-size:20px;line-height:1.18}
 .stat-value{margin-top:6px;font-size:25px;font-weight:950;letter-spacing:-.03em}
 .stat-sub{margin-top:4px;color:var(--muted);font-size:12px}
 .chart-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
-.chart-svg{display:block;width:100%;min-width:560px;height:220px;background:transparent;border-radius:18px}
+.chart-scroll.no-scroll{overflow:visible}
+.chart-svg{display:block;width:100%;min-width:0;height:220px;background:transparent;border-radius:18px}
+.chart-svg.compact{height:auto}
 .axis{stroke:#d4dbe8;stroke-width:1}
 .line{stroke:#0f172a}
 .dot{fill:#0f172a}
 .chart-label{fill:#667085;font-size:12px}
+.chart-label.strong{font-weight:850}
+.axis-label{font-size:11px}
 .svg-profit{fill:#067647;font-size:13px;font-weight:900}
 .svg-loss{fill:#c01048;font-size:13px;font-weight:900}
 .bar-profit{fill:#0ea76c}
@@ -579,4 +583,25 @@ input[type="number"]{-moz-appearance:textfield}
 /* v14 password reset */
 .login-card .field + .field{
   margin-top:12px;
+}
+
+
+/* v15 mobile chart refinement */
+.chart-panel{display:grid;gap:12px}
+.chart-summary-row{display:grid;gap:10px}
+.chart-summary-row.three{grid-template-columns:repeat(3,1fr)}
+.chart-summary-row.two{grid-template-columns:repeat(2,1fr)}
+.chart-summary-pill{padding:12px 12px 11px;border-radius:18px;background:#f8fafc;border:1px solid #e7edf6}
+.chart-summary-label{font-size:12px;font-weight:850;color:var(--muted)}
+.chart-summary-value{margin-top:4px;font-size:20px;font-weight:950;letter-spacing:-.03em;color:var(--ink)}
+.profit-text{color:#067647}
+.loss-text{color:#c01048}
+
+@media (max-width: 767px){
+  .chart-card{padding-bottom:14px}
+  .chart-summary-row.three{grid-template-columns:1fr}
+  .chart-summary-row.two{grid-template-columns:repeat(2,1fr)}
+  .chart-summary-pill{padding:10px 12px}
+  .chart-summary-value{font-size:18px}
+  .chart-svg.compact{height:auto}
 }
