@@ -56,6 +56,39 @@ function toNumber(v, f = 0) { const n = Number(v); return Number.isFinite(n) ? n
 function money(n) { return toNumber(n).toLocaleString("zh-TW", { maximumFractionDigits: 0 }); }
 function signedMoney(n) { const v = toNumber(n); return `${v >= 0 ? "+" : "-"}${money(Math.abs(v))}`; }
 function percent(n) { return Number.isFinite(n) ? `${n.toFixed(1)}%` : "0.0%"; }
+
+function compactMoney(n) {
+  const v = toNumber(n);
+  const sign = v < 0 ? "-" : "";
+  const abs = Math.abs(v);
+  if (abs >= 10000) return `${sign}${Math.round(abs / 1000)}k`;
+  return `${sign}${money(abs)}`;
+}
+
+function niceStep(rawStep) {
+  const raw = Math.max(1, Math.abs(rawStep));
+  const power = Math.pow(10, Math.floor(Math.log10(raw)));
+  const normalized = raw / power;
+  const nice = normalized <= 1 ? 1 : normalized <= 2 ? 2 : normalized <= 5 ? 5 : 10;
+  return nice * power;
+}
+
+function makeYAxisTicks(minValue, maxValue, count = 5) {
+  if (minValue === maxValue) {
+    const step = niceStep(Math.abs(maxValue || 1) / 2);
+    return [minValue - step, minValue, minValue + step];
+  }
+  const step = niceStep((maxValue - minValue) / Math.max(1, count - 1));
+  const start = Math.floor(minValue / step) * step;
+  const end = Math.ceil(maxValue / step) * step;
+  const ticks = [];
+  for (let value = start; value <= end + step * 0.5; value += step) {
+    ticks.push(Math.round(value));
+  }
+  if (!ticks.includes(0) && minValue < 0 && maxValue > 0) ticks.push(0);
+  return Array.from(new Set(ticks)).sort((a, b) => a - b);
+}
+
 function dateLabel(s) { const p = String(s || "").split("-"); return p.length === 3 ? `${Number(p[1])}/${Number(p[2])}` : s || ""; }
 function getDisplayEventName(r) {
   return r.event_name === "自訂名稱"
@@ -343,10 +376,13 @@ function CumulativeProfitChart({ data }) {
   const isMobile = typeof window !== "undefined" ? window.innerWidth < 768 : false;
   const width = isMobile ? 360 : 680;
   const height = isMobile ? 228 : 240;
-  const padding = { top: 22, right: 18, bottom: 34, left: 18 };
+  const padding = { top: 20, right: 18, bottom: 34, left: isMobile ? 42 : 54 };
   const values = data.map((i) => i.cumulativeProfit);
-  const minValue = Math.min(0, ...values);
-  const maxValue = Math.max(0, ...values);
+  const rawMinValue = Math.min(0, ...values);
+  const rawMaxValue = Math.max(0, ...values);
+  const yTicks = makeYAxisTicks(rawMinValue, rawMaxValue, isMobile ? 4 : 5);
+  const minValue = Math.min(...yTicks);
+  const maxValue = Math.max(...yTicks);
   const range = maxValue - minValue || 1;
   const chartWidth = width - padding.left - padding.right;
   const chartHeight = height - padding.top - padding.bottom;
@@ -391,7 +427,12 @@ function CumulativeProfitChart({ data }) {
               <stop offset="100%" stopColor="rgba(37, 99, 235, 0)" />
             </linearGradient>
           </defs>
-          <line x1={padding.left} x2={width - padding.right} y1={zeroY} y2={zeroY} className="axis" />
+          {yTicks.map((tick) => (
+            <g key={`tick-${tick}`}>
+              <line x1={padding.left} x2={width - padding.right} y1={y(tick)} y2={y(tick)} className={tick === 0 ? "axis zero-axis" : "grid-line"} />
+              <text x={padding.left - 8} y={y(tick) + 4} textAnchor="end" className="chart-label y-axis-label">{compactMoney(tick)}</text>
+            </g>
+          ))}
           {data.length > 1 ? <polygon className="area-fill" points={`${padding.left},${zeroY} ${points} ${x(data.length - 1)},${zeroY}`} /> : null}
           {data.length > 1 ? <polyline fill="none" className="line" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" points={points} /> : null}
 
@@ -430,10 +471,13 @@ function DailyProfitChart({ data }) {
   const isMobile = typeof window !== "undefined" ? window.innerWidth < 768 : false;
   const width = isMobile ? 360 : 680;
   const height = isMobile ? 228 : 240;
-  const padding = { top: 22, right: 18, bottom: 34, left: 18 };
+  const padding = { top: 20, right: 18, bottom: 34, left: isMobile ? 42 : 54 };
   const values = data.map((i) => i.netProfit);
-  const minValue = Math.min(0, ...values);
-  const maxValue = Math.max(0, ...values);
+  const rawMinValue = Math.min(0, ...values);
+  const rawMaxValue = Math.max(0, ...values);
+  const yTicks = makeYAxisTicks(rawMinValue, rawMaxValue, isMobile ? 4 : 5);
+  const minValue = Math.min(...yTicks);
+  const maxValue = Math.max(...yTicks);
   const range = maxValue - minValue || 1;
   const chartWidth = width - padding.left - padding.right;
   const chartHeight = height - padding.top - padding.bottom;
@@ -458,7 +502,12 @@ function DailyProfitChart({ data }) {
 
       <div className="chart-scroll no-scroll">
         <svg viewBox={`0 0 ${width} ${height}`} className="chart-svg compact">
-          <line x1={padding.left} x2={width - padding.right} y1={zeroY} y2={zeroY} className="axis" />
+          {yTicks.map((tick) => (
+            <g key={`daily-tick-${tick}`}>
+              <line x1={padding.left} x2={width - padding.right} y1={y(tick)} y2={y(tick)} className={tick === 0 ? "axis zero-axis" : "grid-line"} />
+              <text x={padding.left - 8} y={y(tick) + 4} textAnchor="end" className="chart-label y-axis-label">{compactMoney(tick)}</text>
+            </g>
+          ))}
           {data.map((item, index) => {
             const centerX = padding.left + barSpace * index + barSpace / 2;
             const valueY = y(item.netProfit);
@@ -1192,11 +1241,16 @@ function PublicSharePageContent({ snapshot, loading, error }) {
   const width = 900;
   const height = 260;
   const pad = 36;
+  const leftPad = 78;
+  const rightPad = 36;
   const values = chartData.map((i) => toNumber(i.value ?? i.cumulativeProfit));
-  const minValue = Math.min(0, ...values);
-  const maxValue = Math.max(0, ...values);
+  const rawMinValue = Math.min(0, ...values);
+  const rawMaxValue = Math.max(0, ...values);
+  const yTicks = makeYAxisTicks(rawMinValue, rawMaxValue, 5);
+  const minValue = Math.min(...yTicks);
+  const maxValue = Math.max(...yTicks);
   const range = maxValue - minValue || 1;
-  const x = (index) => chartData.length > 1 ? pad + ((width - pad * 2) * index) / (chartData.length - 1) : width / 2;
+  const x = (index) => chartData.length > 1 ? leftPad + ((width - leftPad - rightPad) * index) / (chartData.length - 1) : width / 2;
   const y = (value) => height - pad - ((value - minValue) / range) * (height - pad * 2);
   const points = chartData.map((item, index) => `${x(index)},${y(toNumber(item.value ?? item.cumulativeProfit))}`).join(" ");
   const zeroY = y(0);
@@ -1237,14 +1291,19 @@ function PublicSharePageContent({ snapshot, loading, error }) {
 
           {chartData.length ? (
             <svg viewBox={`0 0 ${width} ${height}`} className="share-demo-chart">
-              <line x1={pad} x2={width - pad} y1={zeroY} y2={zeroY} className="axis" />
+              {yTicks.map((tick) => (
+                <g key={`share-tick-${tick}`}>
+                  <line x1={leftPad} x2={width - rightPad} y1={y(tick)} y2={y(tick)} className={tick === 0 ? "axis zero-axis" : "grid-line"} />
+                  <text x={leftPad - 12} y={y(tick) + 5} textAnchor="end" className="chart-label y-axis-label">{compactMoney(tick)}</text>
+                </g>
+              ))}
               {chartData.length > 1 ? <polyline fill="none" className="line" strokeWidth="7" strokeLinecap="round" strokeLinejoin="round" points={points} /> : null}
               {chartData.map((item, index) => index === 0 || index === chartData.length - 1 || toNumber(item.value ?? item.cumulativeProfit) === maxValue || toNumber(item.value ?? item.cumulativeProfit) === minValue ? (
                 <circle key={index} cx={x(index)} cy={y(toNumber(item.value ?? item.cumulativeProfit))} r="8" className="dot" />
               ) : null)}
-              <text x={pad} y={height - 8} textAnchor="start" className="chart-label axis-label">{chartData[0]?.label || ""}</text>
+              <text x={leftPad} y={height - 8} textAnchor="start" className="chart-label axis-label">{chartData[0]?.label || ""}</text>
               <text x={width / 2} y={height - 8} textAnchor="middle" className="chart-label axis-label">{mid?.label || ""}</text>
-              <text x={width - pad} y={height - 8} textAnchor="end" className="chart-label axis-label">{chartData[chartData.length - 1]?.label || ""}</text>
+              <text x={width - rightPad} y={height - 8} textAnchor="end" className="chart-label axis-label">{chartData[chartData.length - 1]?.label || ""}</text>
             </svg>
           ) : (
             <div className="empty">這個區間沒有圖表資料。</div>

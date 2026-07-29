@@ -1075,3 +1075,29 @@ input[type="number"]{-moz-appearance:textfield}
     font-size:29px;
   }
 }
+
+
+/* v29 chart axis ticks */
+.grid-line{
+  stroke:#e3e8f1;
+  stroke-width:1;
+}
+.zero-axis{
+  stroke:#ccd5e3;
+  stroke-width:1.2;
+}
+.y-axis-label{
+  fill:#667085;
+  font-size:10.5px;
+  font-weight:800;
+}
+@media (min-width: 768px){
+  .y-axis-label{
+    font-size:11.5px;
+  }
+}
+@media (max-width: 767px){
+  .share-demo-chart .y-axis-label{
+    font-size:15px;
+  }
+}
