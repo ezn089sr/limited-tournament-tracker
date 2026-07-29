@@ -133,3 +133,9 @@ npm run dev
 - 使用 html2canvas 將統計頁主要內容截成 PNG
 - 支援 Web Share API，可在 iPhone 分享面板中選 LINE
 - 若瀏覽器不支援直接分享圖片，會下載 PNG 供使用者手動分享
+
+
+## v20 Share Hotfix
+- 修正 V19 統計頁全白問題
+- 補上 React useRef import
+- 分享截圖功能保留
