@@ -928,3 +928,7 @@ input[type="number"]{-moz-appearance:textfield}
     border-radius:28px;
   }
 }
+
+/* v24 official share link */
+.share-demo-card .line-share-link{text-align:center}
+@media (max-width:520px){.share-demo-chart .axis-label{font-size:16px}}

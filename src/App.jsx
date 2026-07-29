@@ -13,6 +13,21 @@ const EVENT_TEMPLATES = {
 };
 const EVENT_OPTIONS = [...Object.keys(EVENT_TEMPLATES), "自訂名稱"];
 
+function makeShareToken(length = 12) {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
+  const bytes = new Uint8Array(length);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (b) => chars[b % chars.length]).join("");
+}
+
+function getShareRangeLabel(startDate, endDate) {
+  if (!startDate && !endDate) return "全部紀錄";
+  if (startDate && endDate) return `${startDate} → ${endDate}`;
+  if (startDate) return `${startDate} → 現在`;
+  return `開始 → ${endDate}`;
+}
+
+
 function formatLocalDate(date) {
   const y = date.getFullYear();
   const m = String(date.getMonth() + 1).padStart(2, "0");
@@ -833,7 +848,6 @@ function AddPage({ form, setForm, saveRecord, saving, monthSummary }) {
 function StatsPage({ records }) {
   const [rangePreset, setRangePreset] = useState("month");
   const [sharing, setSharing] = useState(false);
-  const [shareImageUrl, setShareImageUrl] = useState("");
   const [startDate, setStartDate] = useState(startOfCurrentMonthString());
   const [endDate, setEndDate] = useState(todayString());
   const filteredRecords = useMemo(() => filterRecordsByDate(records, startDate, endDate), [records, startDate, endDate]);
@@ -857,24 +871,46 @@ function StatsPage({ records }) {
 
     try {
       setSharing(true);
-      await new Promise((resolve) => requestAnimationFrame(resolve));
-      const dataUrl = createStatsShareDataUrl({ overall, cumulativeProfitData, startDate, endDate });
-      setShareImageUrl(dataUrl);
+      const token = makeShareToken(12);
+      const rangeLabel = getShareRangeLabel(startDate, endDate);
+      const chartData = cumulativeProfitData.map((item) => ({
+        label: item.label,
+        date: item.date,
+        value: item.cumulativeProfit,
+      }));
+
+      const snapshot = {
+        token,
+        user_id: session?.user?.id,
+        title: "限時錦標賽統計",
+        range_label: rangeLabel,
+        start_date: startDate || null,
+        end_date: endDate || null,
+        summary: {
+          netProfit: overall.netProfit,
+          roi: overall.roi,
+          totalGames: overall.totalGames,
+          totalEntries: overall.totalEntries,
+          totalBuyIn: overall.totalBuyIn,
+          totalServiceFee: overall.totalServiceFee,
+          totalCost: overall.totalCost,
+          totalPrize: overall.totalPrize,
+          avgProfit: overall.avgProfit,
+        },
+        chart_data: chartData,
+        is_public: true,
+      };
+
+      const { error } = await supabase.from("share_snapshots").insert(snapshot);
+      if (error) throw error;
+
+      const url = `${window.location.origin}/share/${token}`;
+      const text = encodeURIComponent(`我的限時錦標賽統計：${signedMoney(overall.netProfit)}\n${url}`);
+      window.location.href = `https://line.me/R/share?text=${text}`;
     } catch (error) {
-      alert(error.message || "產生分享圖片失敗，請稍後再試");
+      alert(error.message || "建立分享連結失敗。請確認 Supabase 已建立 share_snapshots 資料表。");
     } finally {
       setSharing(false);
-    }
-  }
-
-  function openShareImage() {
-    if (!shareImageUrl) return;
-    const win = window.open();
-    if (win) {
-      win.document.write(`<html><head><title>限時錦標賽統計</title><meta name="viewport" content="width=device-width, initial-scale=1" /></head><body style="margin:0;background:#111;display:grid;place-items:center;min-height:100vh;"><img src="${shareImageUrl}" style="width:100%;max-width:520px;height:auto;display:block;" /></body></html>`);
-      win.document.close();
-    } else {
-      alert("瀏覽器封鎖開啟圖片，請長按下方圖片儲存。");
     }
   }
 
@@ -941,29 +977,6 @@ function StatsPage({ records }) {
         <GroupTable rows={byEventName} />
       </details>
 
-      {shareImageUrl ? (
-        <div className="share-preview-backdrop" role="dialog" aria-modal="true">
-          <div className="share-preview-card">
-            <div className="share-preview-head">
-              <div>
-                <div className="share-preview-title">統計分享圖已產生</div>
-                <div className="share-preview-text">長按圖片可儲存，或開啟圖片後分享到 LINE。</div>
-              </div>
-              <button type="button" className="share-preview-close" onClick={() => setShareImageUrl("")}>關閉</button>
-            </div>
-            <div className="share-preview-image-wrap">
-              <img src={shareImageUrl} alt="統計分享圖" className="share-preview-image" />
-            </div>
-            <div className="share-preview-actions">
-              <button type="button" className="secondary-button" onClick={openShareImage}>開啟圖片</button>
-              <a className="primary-button small share-download-link" href={shareImageUrl} download={`限時錦標賽統計-${todayString()}.png`}>
-                下載圖片
-              </a>
-            </div>
-            <div className="share-preview-note">iPhone：長按圖片 → 儲存到照片 → 到 LINE 選圖片傳送。</div>
-          </div>
-        </div>
-      ) : null}
     </main>
   );
 }
@@ -1082,53 +1095,60 @@ function DataPage({ records, signOut }) {
 
 
 
-function ShareDemoPage() {
-  const sample = {
-    netProfit: 113900,
-    roi: 35.7,
-    totalGames: 64,
-    totalEntries: 68,
-    totalCost: 319400,
-    totalPrize: 433300,
-    totalServiceFee: 21800,
-    avgProfit: 1780,
-  };
 
-  const chartData = [
-    { label: "5/15", value: -9100 },
-    { label: "", value: 12000 },
-    { label: "", value: 18000 },
-    { label: "", value: 16000 },
-    { label: "", value: 21000 },
-    { label: "5/29", value: 39000 },
-    { label: "", value: 48000 },
-    { label: "", value: 52000 },
-    { label: "", value: 61000 },
-    { label: "", value: 70000 },
-    { label: "", value: 75000 },
-    { label: "", value: 93000 },
-    { label: "", value: 88000 },
-    { label: "", value: 104000 },
-    { label: "", value: 115900 },
-    { label: "", value: 98000 },
-    { label: "", value: 106000 },
-    { label: "", value: 101000 },
-    { label: "7/28", value: 113900 },
-  ];
+function PublicSharePageContent({ snapshot, loading, error }) {
+  if (loading) {
+    return (
+      <main className="share-demo-wrap">
+        <section className="share-demo-card">
+          <div className="share-demo-hero">
+            <div>
+              <div className="app-kicker">LIMITED TOURNAMENT TRACKER</div>
+              <h1>載入分享統計中...</h1>
+              <p>請稍等一下。</p>
+            </div>
+          </div>
+        </section>
+      </main>
+    );
+  }
+
+  if (error || !snapshot) {
+    return (
+      <main className="share-demo-wrap">
+        <section className="share-demo-card">
+          <div className="share-demo-hero">
+            <div>
+              <div className="app-kicker">LIMITED TOURNAMENT TRACKER</div>
+              <h1>找不到分享頁</h1>
+              <p>{error || "這個分享連結可能已失效，或資料不存在。"}</p>
+            </div>
+            <a className="line-share-link" href="/">回到記帳工具</a>
+          </div>
+        </section>
+      </main>
+    );
+  }
+
+  const summary = snapshot.summary || {};
+  const chartData = snapshot.chart_data || [];
+  const rangeLabel = snapshot.range_label || getShareRangeLabel(snapshot.start_date, snapshot.end_date);
+  const title = snapshot.title || "限時錦標賽統計";
+  const sourceUrl = typeof window !== "undefined" ? window.location.href : "";
+  const lineShareText = encodeURIComponent(`我的限時錦標賽統計：${signedMoney(summary.netProfit || 0)}\n${sourceUrl}`);
 
   const width = 900;
   const height = 260;
   const pad = 36;
-  const values = chartData.map((i) => i.value);
+  const values = chartData.map((i) => toNumber(i.value ?? i.cumulativeProfit));
   const minValue = Math.min(0, ...values);
   const maxValue = Math.max(0, ...values);
   const range = maxValue - minValue || 1;
-  const x = (index) => pad + ((width - pad * 2) * index) / (chartData.length - 1);
+  const x = (index) => chartData.length > 1 ? pad + ((width - pad * 2) * index) / (chartData.length - 1) : width / 2;
   const y = (value) => height - pad - ((value - minValue) / range) * (height - pad * 2);
-  const points = chartData.map((item, index) => `${x(index)},${y(item.value)}`).join(" ");
+  const points = chartData.map((item, index) => `${x(index)},${y(toNumber(item.value ?? item.cumulativeProfit))}`).join(" ");
   const zeroY = y(0);
-
-  const lineShareText = encodeURIComponent(`我的限時錦標賽統計：${signedMoney(sample.netProfit)}\n${window.location.href}`);
+  const mid = chartData[Math.floor((chartData.length - 1) / 2)];
 
   return (
     <main className="share-demo-wrap">
@@ -1136,81 +1156,148 @@ function ShareDemoPage() {
         <div className="share-demo-hero">
           <div>
             <div className="app-kicker">LIMITED TOURNAMENT TRACKER</div>
-            <h1>限時錦標賽統計</h1>
-            <p>這是分享頁 Demo。未來玩家按分享後，LINE 聊天室會送出這種連結，朋友點進來就看到完整統計。</p>
+            <h1>{title}</h1>
+            <p>公開分享頁。朋友不需要登入，也可以查看這段區間的限時錦標賽統計。</p>
           </div>
           <div className="share-demo-profit">
             <span>區間淨利</span>
-            <strong>{signedMoney(sample.netProfit)}</strong>
-            <small>ROI {percent(sample.roi)}</small>
+            <strong>{signedMoney(summary.netProfit || 0)}</strong>
+            <small>ROI {percent(summary.roi || 0)}</small>
           </div>
         </div>
 
         <div className="share-demo-grid">
-          <StatCard title="總買入" value={money(sample.totalCost)} sub="買入 + 服務費" />
-          <StatCard title="總獎金" value={money(sample.totalPrize)} sub="區間累積獎金" />
-          <StatCard title="服務費" value={money(sample.totalServiceFee)} sub="區間累積服務費" />
-          <StatCard title="平均每場" value={signedMoney(sample.avgProfit)} sub="平均淨利 / 場" />
-          <StatCard title="總場次" value={`${sample.totalGames}`} sub={`Entries ${sample.totalEntries}`} />
+          <StatCard title="總買入" value={money(summary.totalCost || 0)} sub="買入 + 服務費" />
+          <StatCard title="總獎金" value={money(summary.totalPrize || 0)} sub="區間累積獎金" />
+          <StatCard title="服務費" value={money(summary.totalServiceFee || 0)} sub="區間累積服務費" />
+          <StatCard title="平均每場" value={signedMoney(summary.avgProfit || 0)} sub="平均淨利 / 場" />
+          <StatCard title="總場次" value={`${summary.totalGames || 0}`} sub={`Entries ${summary.totalEntries || 0}`} />
         </div>
 
         <div className="share-demo-chart-card">
           <div className="chart-topbar">
             <div>
               <div className="card-heading">累積淨利圖</div>
-              <div className="hint">示範區間：全部紀錄</div>
+              <div className="hint">分享區間：{rangeLabel}</div>
             </div>
-            <div className="chart-range-badge">5/15 → 7/28</div>
+            <div className="chart-range-badge">{rangeLabel}</div>
           </div>
 
-          <svg viewBox={`0 0 ${width} ${height}`} className="share-demo-chart">
-            <line x1={pad} x2={width - pad} y1={zeroY} y2={zeroY} className="axis" />
-            <polyline fill="none" className="line" strokeWidth="7" strokeLinecap="round" strokeLinejoin="round" points={points} />
-            {chartData.map((item, index) => index === 0 || index === chartData.length - 1 || item.value === maxValue ? (
-              <circle key={index} cx={x(index)} cy={y(item.value)} r="8" className="dot" />
-            ) : null)}
-            <text x={pad} y={height - 8} textAnchor="start" className="chart-label axis-label">5/15</text>
-            <text x={width / 2} y={height - 8} textAnchor="middle" className="chart-label axis-label">5/29</text>
-            <text x={width - pad} y={height - 8} textAnchor="end" className="chart-label axis-label">7/28</text>
-          </svg>
+          {chartData.length ? (
+            <svg viewBox={`0 0 ${width} ${height}`} className="share-demo-chart">
+              <line x1={pad} x2={width - pad} y1={zeroY} y2={zeroY} className="axis" />
+              {chartData.length > 1 ? <polyline fill="none" className="line" strokeWidth="7" strokeLinecap="round" strokeLinejoin="round" points={points} /> : null}
+              {chartData.map((item, index) => index === 0 || index === chartData.length - 1 || toNumber(item.value ?? item.cumulativeProfit) === maxValue || toNumber(item.value ?? item.cumulativeProfit) === minValue ? (
+                <circle key={index} cx={x(index)} cy={y(toNumber(item.value ?? item.cumulativeProfit))} r="8" className="dot" />
+              ) : null)}
+              <text x={pad} y={height - 8} textAnchor="start" className="chart-label axis-label">{chartData[0]?.label || ""}</text>
+              <text x={width / 2} y={height - 8} textAnchor="middle" className="chart-label axis-label">{mid?.label || ""}</text>
+              <text x={width - pad} y={height - 8} textAnchor="end" className="chart-label axis-label">{chartData[chartData.length - 1]?.label || ""}</text>
+            </svg>
+          ) : (
+            <div className="empty">這個區間沒有圖表資料。</div>
+          )}
         </div>
 
         <div className="share-demo-actions">
           <a className="line-share-link" href={`https://line.me/R/share?text=${lineShareText}`}>
-            用 LINE 分享這個 Demo 連結
+            用 LINE 分享這個統計連結
           </a>
           <a className="share-demo-secondary" href="/">
-            回到記帳工具
+            開始使用記帳工具
           </a>
         </div>
 
         <div className="share-demo-footer">
-          這頁是公開分享頁 Demo，之後可改成每次按分享都產生一組專屬分享連結。
+          此頁只顯示分享當下的統計快照，不會公開你的完整紀錄。
         </div>
       </section>
     </main>
   );
 }
 
-function LoadingFallback({ message = "載入中...", onReset }) {
-  return (
-    <main className="loading-wrap">
-      <div className="loading-card">
-        <div className="loading-spinner" />
-        <h1>{message}</h1>
-        <p>如果畫面停在這裡太久，可能是登入狀態或瀏覽器快取卡住。</p>
-        {onReset ? (
-          <button className="primary-button full" type="button" onClick={onReset}>
-            清除登入狀態並重新整理
-          </button>
-        ) : null}
-      </div>
-    </main>
-  );
+function ShareDemoPage() {
+  const snapshot = {
+    title: "限時錦標賽統計",
+    range_label: "5/15 → 7/28",
+    summary: {
+      netProfit: 113900,
+      roi: 35.7,
+      totalGames: 64,
+      totalEntries: 68,
+      totalCost: 319400,
+      totalPrize: 433300,
+      totalServiceFee: 21800,
+      avgProfit: 1780,
+    },
+    chart_data: [
+      { label: "5/15", value: -9100 },
+      { label: "", value: 12000 },
+      { label: "", value: 18000 },
+      { label: "", value: 16000 },
+      { label: "", value: 21000 },
+      { label: "5/29", value: 39000 },
+      { label: "", value: 48000 },
+      { label: "", value: 52000 },
+      { label: "", value: 61000 },
+      { label: "", value: 70000 },
+      { label: "", value: 75000 },
+      { label: "", value: 93000 },
+      { label: "", value: 88000 },
+      { label: "", value: 104000 },
+      { label: "", value: 115900 },
+      { label: "", value: 98000 },
+      { label: "", value: 106000 },
+      { label: "", value: 101000 },
+      { label: "7/28", value: 113900 },
+    ],
+  };
+
+  return <PublicSharePageContent snapshot={snapshot} />;
 }
+
+function SharePublicPage({ token }) {
+  const [loading, setLoading] = useState(true);
+  const [snapshot, setSnapshot] = useState(null);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let mounted = true;
+
+    async function loadShare() {
+      try {
+        const { data, error } = await supabase
+          .from("share_snapshots")
+          .select("*")
+          .eq("token", token)
+          .eq("is_public", true)
+          .single();
+
+        if (error) throw error;
+        if (!mounted) return;
+        setSnapshot(data);
+      } catch (error) {
+        if (!mounted) return;
+        setError("找不到這個分享連結，或分享已被關閉。");
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    }
+
+    loadShare();
+    return () => { mounted = false; };
+  }, [token]);
+
+  return <PublicSharePageContent snapshot={snapshot} loading={loading} error={error} />;
+}
+
 
 export default function App() {
   if (window.location.pathname === "/share-demo") return <ShareDemoPage />;
+  if (window.location.pathname.startsWith("/share/")) {
+    const token = window.location.pathname.split("/share/")[1]?.split("/")[0];
+    return <SharePublicPage token={token} />;
+  }
   const [session, setSession] = useState(null);
   const [records, setRecords] = useState([]);
   const [loading, setLoading] = useState(true);

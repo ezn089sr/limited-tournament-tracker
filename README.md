@@ -160,3 +160,11 @@ npm run dev
 - 可先預覽 LINE 分享連結點開後的統計頁樣式
 - Demo 頁包含統計卡片、累積淨利圖、LINE 分享 Demo 連結
 - 這版先不連真實使用者資料，下一版可做正式分享資料落庫
+
+
+## v24 Official Share Link
+- 統計頁「分享」改為建立公開分享快照
+- 產生 /share/{token} 公開頁，朋友不需登入可查看
+- 自動開啟 LINE share URL 分享文字與連結
+- 新增 Supabase SQL：supabase/share_snapshots.sql
+- 分享頁只公開統計快照，不公開完整紀錄
