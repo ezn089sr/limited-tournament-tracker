@@ -84,3 +84,16 @@ npm run dev
 - 新增頁第一區改成單一主要輸入區
 - 順序改為：日期 / 錦標賽快捷鍵 / 下拉選單 / 買入 / 服務費快捷鍵 / 服務費 / 獎金
 - 快捷鍵不再孤立顯示，避免誤以為只能記 3400/6600/11000
+
+
+## v13 Loading Fix
+- Supabase session 讀取加入 7 秒 timeout
+- 不再讓使用者永久卡在「載入中」
+- 新增清除本機登入狀態並重新整理按鈕
+
+
+## v14 Password Reset
+- 補完整忘記密碼流程
+- 點擊 Supabase recovery email 回到 App 後，會顯示「設定新密碼」頁
+- 使用 supabase.auth.updateUser({ password }) 更新密碼
+- 更新完成後會登出，讓使用者用新密碼重新登入

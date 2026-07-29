@@ -698,19 +698,68 @@ function DataPage({ records, signOut }) {
   return <main className="page"><section className="hero-panel compact"><div><div className="hero-kicker">資料</div><h2>你的資料現在已經在雲端</h2></div></section><div className="mobile-card warning-card"><div className="card-heading">建議保留額外備份</div><p>雖然這版已經使用 Supabase 雲端儲存，仍建議定期匯出 JSON 或 CSV，讓你更安心。</p></div><div className="mobile-card action-list"><button type="button" className="action-button" onClick={exportBackup}>備份 JSON</button><button type="button" className="action-button" onClick={exportCsv}>匯出 CSV</button><button type="button" className="danger-button" onClick={signOut}>登出</button></div></main>;
 }
 
+
+function LoadingFallback({ message = "載入中...", onReset }) {
+  return (
+    <main className="loading-wrap">
+      <div className="loading-card">
+        <div className="loading-spinner" />
+        <h1>{message}</h1>
+        <p>如果畫面停在這裡太久，可能是登入狀態或瀏覽器快取卡住。</p>
+        {onReset ? (
+          <button className="primary-button full" type="button" onClick={onReset}>
+            清除登入狀態並重新整理
+          </button>
+        ) : null}
+      </div>
+    </main>
+  );
+}
+
 export default function App() {
   const [session, setSession] = useState(null);
   const [records, setRecords] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [authError, setAuthError] = useState("");
   const [saving, setSaving] = useState(false);
   const [tab, setTab] = useState("add");
   const [toast, setToast] = useState("");
   const [form, setForm] = useState(defaultForm);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => { setSession(data.session ?? null); setLoading(false); });
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => setSession(session ?? null));
-    return () => listener.subscription.unsubscribe();
+    let mounted = true;
+    const timeout = setTimeout(() => {
+      if (!mounted) return;
+      setAuthError("登入狀態讀取逾時");
+      setLoading(false);
+    }, 7000);
+
+    supabase.auth.getSession()
+      .then(({ data, error }) => {
+        if (!mounted) return;
+        if (error) setAuthError(error.message || "登入狀態讀取失敗");
+        setSession(data?.session ?? null);
+      })
+      .catch((error) => {
+        if (!mounted) return;
+        setAuthError(error.message || "登入狀態讀取失敗");
+      })
+      .finally(() => {
+        if (!mounted) return;
+        clearTimeout(timeout);
+        setLoading(false);
+      });
+
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session ?? null);
+      setAuthError("");
+    });
+
+    return () => {
+      mounted = false;
+      clearTimeout(timeout);
+      listener.subscription.unsubscribe();
+    };
   }, []);
 
   useEffect(() => {
@@ -804,10 +853,19 @@ export default function App() {
     await supabase.auth.signOut();
   }
 
+  function resetLocalAuth() {
+    try {
+      localStorage.clear();
+      sessionStorage.clear();
+    } catch {}
+    window.location.reload();
+  }
+
   const monthRecords = useMemo(() => filterRecordsByDate(records, startOfCurrentMonthString(), todayString()), [records]);
   const monthSummary = useMemo(() => sumRecords(monthRecords), [monthRecords]);
 
-  if (loading && !session) return <div className="center-screen">載入中...</div>;
+  if (loading && !session) return <LoadingFallback message="載入中..." />;
+  if (authError && !session) return <LoadingFallback message={authError} onReset={resetLocalAuth} />;
   if (!session) {
     const context = getBrowserContext();
     const skipped = localStorage.getItem("onboarding_skip") === "1";
@@ -818,5 +876,5 @@ export default function App() {
     return <LoginPage />;
   }
 
-  return <div className="app-shell"><div className="bg-orb orb-a" /><div className="bg-orb orb-b" /><header className="app-header"><div><div className="app-kicker">Cloud Version</div><h1>限時錦標賽記帳</h1></div><div className={monthSummary.netProfit >= 0 ? "header-profit profit" : "header-profit loss"}>本月 {signedMoney(monthSummary.netProfit)}</div></header>{loading ? <div className="center-screen">同步資料中...</div> : null}{!loading && tab === "add" ? <AddPage form={form} setForm={setForm} saveRecord={saveRecord} saving={saving} monthSummary={monthSummary} /> : null}{!loading && tab === "stats" ? <StatsPage records={records} /> : null}{!loading && tab === "records" ? <RecordsPage records={records} removeRecord={removeRecord} updateRecord={updateRecord} /> : null}{!loading && tab === "data" ? <DataPage records={records} signOut={signOut} /> : null}<nav className="bottom-nav"><button className={tab === "add" ? "active" : ""} onClick={() => setTab("add")}>＋<span>新增</span></button><button className={tab === "stats" ? "active" : ""} onClick={() => setTab("stats")}>▦<span>統計</span></button><button className={tab === "records" ? "active" : ""} onClick={() => setTab("records")}>≡<span>紀錄</span></button><button className={tab === "data" ? "active" : ""} onClick={() => setTab("data")}>⇅<span>資料</span></button></nav><Toast message={toast} /></div>;
+  return <div className="app-shell"><div className="bg-orb orb-a" /><div className="bg-orb orb-b" /><header className="app-header"><div><div className="app-kicker">Cloud Version</div><h1>限時錦標賽記帳</h1></div><div className={monthSummary.netProfit >= 0 ? "header-profit profit" : "header-profit loss"}>本月 {signedMoney(monthSummary.netProfit)}</div></header>{loading ? <LoadingFallback message="同步資料中..." /> : null}{!loading && tab === "add" ? <AddPage form={form} setForm={setForm} saveRecord={saveRecord} saving={saving} monthSummary={monthSummary} /> : null}{!loading && tab === "stats" ? <StatsPage records={records} /> : null}{!loading && tab === "records" ? <RecordsPage records={records} removeRecord={removeRecord} updateRecord={updateRecord} /> : null}{!loading && tab === "data" ? <DataPage records={records} signOut={signOut} /> : null}<nav className="bottom-nav"><button className={tab === "add" ? "active" : ""} onClick={() => setTab("add")}>＋<span>新增</span></button><button className={tab === "stats" ? "active" : ""} onClick={() => setTab("stats")}>▦<span>統計</span></button><button className={tab === "records" ? "active" : ""} onClick={() => setTab("records")}>≡<span>紀錄</span></button><button className={tab === "data" ? "active" : ""} onClick={() => setTab("data")}>⇅<span>資料</span></button></nav><Toast message={toast} /></div>;
 }
