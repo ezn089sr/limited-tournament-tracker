@@ -168,3 +168,9 @@ npm run dev
 - 自動開啟 LINE share URL 分享文字與連結
 - 新增 Supabase SQL：supabase/share_snapshots.sql
 - 分享頁只公開統計快照，不公開完整紀錄
+
+
+## v25 White Screen Hotfix
+- 修正 V24 打開白屏問題
+- 補回 LoadingFallback 元件
+- 保留正式分享連結功能與 /share/{token} 公開頁

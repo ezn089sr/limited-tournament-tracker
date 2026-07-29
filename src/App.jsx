@@ -1096,6 +1096,24 @@ function DataPage({ records, signOut }) {
 
 
 
+
+function LoadingFallback({ message = "載入中...", onReset }) {
+  return (
+    <main className="loading-wrap">
+      <div className="loading-card">
+        <div className="loading-spinner" />
+        <h1>{message}</h1>
+        <p>如果畫面停在這裡太久，可能是登入狀態或瀏覽器快取卡住。</p>
+        {onReset ? (
+          <button className="primary-button full" type="button" onClick={onReset}>
+            清除登入狀態並重新整理
+          </button>
+        ) : null}
+      </div>
+    </main>
+  );
+}
+
 function PublicSharePageContent({ snapshot, loading, error }) {
   if (loading) {
     return (
@@ -1293,9 +1311,10 @@ function SharePublicPage({ token }) {
 
 
 export default function App() {
-  if (window.location.pathname === "/share-demo") return <ShareDemoPage />;
-  if (window.location.pathname.startsWith("/share/")) {
-    const token = window.location.pathname.split("/share/")[1]?.split("/")[0];
+  const currentPath = typeof window !== "undefined" ? window.location.pathname : "/";
+  if (currentPath === "/share-demo") return <ShareDemoPage />;
+  if (currentPath.startsWith("/share/")) {
+    const token = currentPath.split("/share/")[1]?.split("/")[0];
     return <SharePublicPage token={token} />;
   }
   const [session, setSession] = useState(null);
