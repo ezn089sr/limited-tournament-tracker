@@ -932,3 +932,146 @@ input[type="number"]{-moz-appearance:textfield}
 /* v24 official share link */
 .share-demo-card .line-share-link{text-align:center}
 @media (max-width:520px){.share-demo-chart .axis-label{font-size:16px}}
+
+
+/* v28 mobile share page + contact author */
+.contact-author-card{
+  min-height:72px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  padding:15px 18px;
+  border-radius:18px;
+  background:linear-gradient(135deg,#111c44,#172554);
+  color:#fff;
+  text-decoration:none;
+  font-weight:950;
+}
+.contact-author-title{
+  font-size:16px;
+  font-weight:950;
+}
+.contact-author-text{
+  margin-top:3px;
+  color:#cbd5e1;
+  font-size:13px;
+  font-weight:800;
+}
+.contact-author-card span{
+  min-width:54px;
+  min-height:34px;
+  display:grid;
+  place-items:center;
+  border-radius:999px;
+  background:rgba(255,255,255,.14);
+  color:#fff;
+  font-size:13px;
+}
+
+@media (max-width: 767px){
+  .share-demo-wrap{
+    padding:10px;
+  }
+  .share-demo-card{
+    gap:10px;
+  }
+  .share-demo-hero{
+    grid-template-columns:1fr;
+    gap:10px;
+    padding:14px;
+    border-radius:22px;
+  }
+  .share-demo-hero h1{
+    margin:4px 0 5px;
+    font-size:28px;
+    letter-spacing:-.055em;
+  }
+  .share-demo-hero p{
+    font-size:12px;
+    line-height:1.45;
+  }
+  .share-demo-profit{
+    padding:13px 14px;
+    border-radius:20px;
+    gap:4px;
+  }
+  .share-demo-profit span{
+    font-size:12px;
+  }
+  .share-demo-profit strong{
+    font-size:32px;
+  }
+  .share-demo-profit small{
+    font-size:13px;
+  }
+  .share-demo-grid{
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    gap:8px;
+  }
+  .share-demo-grid .stat-card{
+    min-height:84px;
+    padding:11px 12px;
+    border-radius:18px;
+  }
+  .share-demo-grid .stat-title{
+    font-size:11px;
+  }
+  .share-demo-grid .stat-value{
+    margin-top:5px;
+    font-size:20px;
+  }
+  .share-demo-grid .stat-sub{
+    margin-top:3px;
+    font-size:10.5px;
+    line-height:1.25;
+  }
+  .share-demo-chart-card{
+    padding:13px;
+    border-radius:22px;
+  }
+  .share-demo-chart-card .chart-topbar{
+    gap:6px;
+    margin-bottom:4px;
+  }
+  .share-demo-chart-card .card-heading{
+    font-size:18px;
+  }
+  .share-demo-chart-card .hint{
+    font-size:11px;
+    margin-top:2px;
+  }
+  .share-demo-chart-card .chart-range-badge{
+    min-height:26px;
+    padding:0 9px;
+    font-size:10.5px;
+  }
+  .share-demo-chart{
+    margin-top:4px;
+  }
+  .share-demo-actions{
+    gap:8px;
+  }
+  .line-share-link,
+  .share-demo-secondary{
+    min-height:44px;
+    border-radius:15px;
+    font-size:14px;
+  }
+  .share-demo-footer{
+    font-size:11px;
+    line-height:1.4;
+  }
+}
+
+@media (max-width: 380px){
+  .share-demo-grid{
+    grid-template-columns:1fr 1fr;
+  }
+  .share-demo-grid .stat-value{
+    font-size:18px;
+  }
+  .share-demo-profit strong{
+    font-size:29px;
+  }
+}

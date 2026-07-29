@@ -186,3 +186,9 @@ npm run dev
 - 新增 vercel.json
 - 修正 /share/{token} 直接開啟時 Vercel 404: NOT_FOUND
 - 所有路徑會回到 index.html，再由 React App 處理分享頁路由
+
+
+## v28 Mobile Share + Contact
+- 手機版公開分享頁壓縮高度，讓圖表更快出現在首屏附近
+- 分享頁手機版統計卡片改兩欄小卡
+- 資料頁在 CSV 下方新增「聯繫作者」IG 連結：@riskreve1

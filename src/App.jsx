@@ -1090,7 +1090,41 @@ function DataPage({ records, signOut }) {
     const csv = [headers, ...rows].map((row) => row.map((cell) => `"${String(cell ?? "").replace(/"/g, '""')}"`).join(",")).join("\n");
     downloadText(`限時錦標賽紀錄_${todayString()}.csv`, "\ufeff" + csv, "text/csv;charset=utf-8");
   }
-  return <main className="page"><section className="hero-panel compact"><div><div className="hero-kicker">資料</div><h2>你的資料現在已經在雲端</h2></div></section><div className="mobile-card warning-card"><div className="card-heading">建議保留額外備份</div><p>雖然這版已經使用 Supabase 雲端儲存，仍建議定期匯出 JSON 或 CSV，讓你更安心。</p></div><div className="mobile-card action-list"><button type="button" className="action-button" onClick={exportBackup}>備份 JSON</button><button type="button" className="action-button" onClick={exportCsv}>匯出 CSV</button><button type="button" className="danger-button" onClick={signOut}>登出</button></div></main>;
+  return (
+    <main className="page">
+      <section className="hero-panel compact">
+        <div>
+          <div className="hero-kicker">資料</div>
+          <h2>你的資料現在已經在雲端</h2>
+        </div>
+      </section>
+
+      <div className="mobile-card warning-card">
+        <div className="card-heading">建議保留額外備份</div>
+        <p>雖然這版已經使用 Supabase 雲端儲存，仍建議定期匯出 JSON 或 CSV，讓你更安心。</p>
+      </div>
+
+      <div className="mobile-card action-list">
+        <button type="button" className="action-button" onClick={exportBackup}>備份 JSON</button>
+        <button type="button" className="action-button" onClick={exportCsv}>匯出 CSV</button>
+
+        <a
+          className="contact-author-card"
+          href="https://www.instagram.com/riskreve1/"
+          target="_blank"
+          rel="noreferrer"
+        >
+          <div>
+            <div className="contact-author-title">聯繫作者</div>
+            <div className="contact-author-text">IG：@riskreve1</div>
+          </div>
+          <span>開啟</span>
+        </a>
+
+        <button type="button" className="danger-button" onClick={signOut}>登出</button>
+      </div>
+    </main>
+  );
 }
 
 
