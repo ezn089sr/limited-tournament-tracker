@@ -1,5 +1,5 @@
 
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { supabase } from "./supabase";
 
 const EVENT_TEMPLATES = {
@@ -156,18 +156,169 @@ function dataUrlToFile(dataUrl, filename) {
   return new File([bytes], filename, { type: mime });
 }
 
-async function captureElementAsPng(element) {
-  const { default: html2canvas } = await import("html2canvas");
-  const canvas = await html2canvas(element, {
-    backgroundColor: "#f3f6fb",
-    scale: Math.min(2, window.devicePixelRatio || 1.5),
-    useCORS: true,
-    allowTaint: true,
-    logging: false,
-    scrollX: 0,
-    scrollY: -window.scrollY,
-    windowWidth: document.documentElement.scrollWidth,
-  });
+function roundRect(ctx, x, y, w, h, r) {
+  const radius = Math.min(r, w / 2, h / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + radius, y);
+  ctx.arcTo(x + w, y, x + w, y + h, radius);
+  ctx.arcTo(x + w, y + h, x, y + h, radius);
+  ctx.arcTo(x, y + h, x, y, radius);
+  ctx.arcTo(x, y, x + w, y, radius);
+  ctx.closePath();
+}
+
+function drawWrappedText(ctx, text, x, y, maxWidth, lineHeight) {
+  const words = String(text).split("");
+  let line = "";
+  let currentY = y;
+  for (let i = 0; i < words.length; i += 1) {
+    const testLine = line + words[i];
+    if (ctx.measureText(testLine).width > maxWidth && line) {
+      ctx.fillText(line, x, currentY);
+      line = words[i];
+      currentY += lineHeight;
+    } else {
+      line = testLine;
+    }
+  }
+  if (line) ctx.fillText(line, x, currentY);
+}
+
+function createStatsShareDataUrl({ overall, cumulativeProfitData, startDate, endDate }) {
+  const canvas = document.createElement("canvas");
+  const width = 1080;
+  const height = 1440;
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext("2d");
+
+  ctx.fillStyle = "#f3f6fb";
+  ctx.fillRect(0, 0, width, height);
+
+  const gradient = ctx.createRadialGradient(860, 180, 40, 860, 180, 640);
+  gradient.addColorStop(0, "rgba(46, 107, 255, 0.16)");
+  gradient.addColorStop(1, "rgba(46, 107, 255, 0)");
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, width, height);
+
+  ctx.fillStyle = "#667085";
+  ctx.font = "700 32px system-ui, -apple-system, BlinkMacSystemFont, sans-serif";
+  ctx.fillText("Cloud Version", 70, 92);
+
+  ctx.fillStyle = "#0f172a";
+  ctx.font = "900 58px system-ui, -apple-system, BlinkMacSystemFont, sans-serif";
+  ctx.fillText("限時錦標賽記帳", 70, 160);
+
+  const rangeText = startDate || endDate ? `${startDate || "開始"} → ${endDate || "現在"}` : "全部紀錄";
+  ctx.fillStyle = "#e8fff3";
+  roundRect(ctx, 720, 92, 290, 72, 36);
+  ctx.fill();
+  ctx.fillStyle = "#067647";
+  ctx.font = "900 32px system-ui, -apple-system, BlinkMacSystemFont, sans-serif";
+  ctx.textAlign = "center";
+  ctx.fillText(signedMoney(overall.netProfit), 865, 138);
+  ctx.textAlign = "left";
+
+  function statCard(x, y, w, h, title, value, sub, dark = false) {
+    ctx.fillStyle = dark ? "#111c44" : "rgba(255,255,255,0.94)";
+    roundRect(ctx, x, y, w, h, 34);
+    ctx.fill();
+
+    ctx.fillStyle = dark ? "#cbd5e1" : "#667085";
+    ctx.font = "800 28px system-ui, -apple-system, BlinkMacSystemFont, sans-serif";
+    ctx.fillText(title, x + 36, y + 54);
+
+    ctx.fillStyle = dark ? "#ffffff" : "#0f172a";
+    ctx.font = "900 52px system-ui, -apple-system, BlinkMacSystemFont, sans-serif";
+    ctx.fillText(value, x + 36, y + 116);
+
+    if (sub) {
+      ctx.fillStyle = dark ? "#cbd5e1" : "#667085";
+      ctx.font = "700 24px system-ui, -apple-system, BlinkMacSystemFont, sans-serif";
+      ctx.fillText(sub, x + 36, y + 158);
+    }
+  }
+
+  statCard(70, 220, 450, 190, "淨利", signedMoney(overall.netProfit), `ROI ${percent(overall.roi)}`, true);
+  statCard(560, 220, 450, 190, "總場次", String(overall.totalGames), `Entries ${overall.totalEntries}`);
+  statCard(70, 440, 450, 180, "總買入", money(overall.totalCost), "買入 + 服務費");
+  statCard(560, 440, 450, 180, "總獎金", money(overall.totalPrize), "區間累積獎金");
+  statCard(70, 650, 450, 180, "服務費", money(overall.totalServiceFee), "區間累積服務費");
+  statCard(560, 650, 450, 180, "平均每場", signedMoney(overall.avgProfit), "平均淨利 / 場");
+
+  ctx.fillStyle = "rgba(255,255,255,0.95)";
+  roundRect(ctx, 70, 880, 940, 420, 42);
+  ctx.fill();
+
+  ctx.fillStyle = "#0f172a";
+  ctx.font = "900 40px system-ui, -apple-system, BlinkMacSystemFont, sans-serif";
+  ctx.fillText("累積淨利圖", 110, 945);
+
+  ctx.fillStyle = "#667085";
+  ctx.font = "700 24px system-ui, -apple-system, BlinkMacSystemFont, sans-serif";
+  ctx.fillText(rangeText, 110, 986);
+
+  const data = cumulativeProfitData || [];
+  if (data.length) {
+    const values = data.map((i) => i.cumulativeProfit);
+    const minValue = Math.min(0, ...values);
+    const maxValue = Math.max(0, ...values);
+    const range = maxValue - minValue || 1;
+    const left = 120, right = 950, top = 1040, bottom = 1220;
+    const x = (index) => data.length > 1 ? left + ((right - left) * index) / (data.length - 1) : (left + right) / 2;
+    const y = (value) => bottom - ((value - minValue) / range) * (bottom - top);
+    const zeroY = y(0);
+
+    ctx.strokeStyle = "#d4dbe8";
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(left, zeroY);
+    ctx.lineTo(right, zeroY);
+    ctx.stroke();
+
+    ctx.strokeStyle = "#0f172a";
+    ctx.lineWidth = 8;
+    ctx.lineJoin = "round";
+    ctx.lineCap = "round";
+    ctx.beginPath();
+    data.forEach((item, index) => {
+      const px = x(index);
+      const py = y(item.cumulativeProfit);
+      if (index === 0) ctx.moveTo(px, py);
+      else ctx.lineTo(px, py);
+    });
+    ctx.stroke();
+
+    const last = data[data.length - 1];
+    const maxIndex = values.indexOf(maxValue);
+    const minIndex = values.indexOf(minValue);
+    [[maxIndex, maxValue], [minIndex, minValue], [data.length - 1, last.cumulativeProfit]].forEach(([index, value]) => {
+      ctx.fillStyle = "#0f172a";
+      ctx.beginPath();
+      ctx.arc(x(index), y(value), 10, 0, Math.PI * 2);
+      ctx.fill();
+    });
+
+    ctx.fillStyle = "#667085";
+    ctx.font = "700 22px system-ui, -apple-system, BlinkMacSystemFont, sans-serif";
+    ctx.fillText(data[0]?.label || "", left, 1268);
+    ctx.textAlign = "center";
+    ctx.fillText(data[Math.floor((data.length - 1) / 2)]?.label || "", (left + right) / 2, 1268);
+    ctx.textAlign = "right";
+    ctx.fillText(data[data.length - 1]?.label || "", right, 1268);
+    ctx.textAlign = "left";
+  } else {
+    ctx.fillStyle = "#667085";
+    ctx.font = "700 30px system-ui, -apple-system, BlinkMacSystemFont, sans-serif";
+    ctx.fillText("這個區間還沒有紀錄。", 110, 1080);
+  }
+
+  ctx.fillStyle = "#667085";
+  ctx.font = "700 24px system-ui, -apple-system, BlinkMacSystemFont, sans-serif";
+  ctx.textAlign = "center";
+  ctx.fillText("限時錦標賽記帳工具", width / 2, 1360);
+  ctx.textAlign = "left";
+
   return canvas.toDataURL("image/png");
 }
 
@@ -682,7 +833,7 @@ function AddPage({ form, setForm, saveRecord, saving, monthSummary }) {
 function StatsPage({ records }) {
   const [rangePreset, setRangePreset] = useState("month");
   const [sharing, setSharing] = useState(false);
-  const shareRef = useRef(null);
+  const [shareImageUrl, setShareImageUrl] = useState("");
   const [startDate, setStartDate] = useState(startOfCurrentMonthString());
   const [endDate, setEndDate] = useState(todayString());
   const filteredRecords = useMemo(() => filterRecordsByDate(records, startDate, endDate), [records, startDate, endDate]);
@@ -702,39 +853,33 @@ function StatsPage({ records }) {
   }
 
   async function shareStatsImage() {
-    if (!shareRef.current || sharing) return;
+    if (sharing) return;
 
     try {
       setSharing(true);
       await new Promise((resolve) => requestAnimationFrame(resolve));
-
-      const dataUrl = await captureElementAsPng(shareRef.current);
-      const file = dataUrlToFile(dataUrl, `限時錦標賽統計-${todayString()}.png`);
-
-      if (navigator.canShare?.({ files: [file] })) {
-        await navigator.share({
-          title: "限時錦標賽記帳統計",
-          text: `我的限時錦標賽統計：${signedMoney(overall.netProfit)}`,
-          files: [file],
-        });
-      } else {
-        const link = document.createElement("a");
-        link.href = dataUrl;
-        link.download = file.name;
-        link.click();
-        alert("已產生統計圖片。若沒有跳出分享面板，請從相簿或下載檔分享到 LINE。");
-      }
+      const dataUrl = createStatsShareDataUrl({ overall, cumulativeProfitData, startDate, endDate });
+      setShareImageUrl(dataUrl);
     } catch (error) {
-      if (error?.name !== "AbortError") {
-        alert(error.message || "產生分享圖片失敗，請稍後再試");
-      }
+      alert(error.message || "產生分享圖片失敗，請稍後再試");
     } finally {
       setSharing(false);
     }
   }
 
+  function openShareImage() {
+    if (!shareImageUrl) return;
+    const win = window.open();
+    if (win) {
+      win.document.write(`<html><head><title>限時錦標賽統計</title><meta name="viewport" content="width=device-width, initial-scale=1" /></head><body style="margin:0;background:#111;display:grid;place-items:center;min-height:100vh;"><img src="${shareImageUrl}" style="width:100%;max-width:520px;height:auto;display:block;" /></body></html>`);
+      win.document.close();
+    } else {
+      alert("瀏覽器封鎖開啟圖片，請長按下方圖片儲存。");
+    }
+  }
+
   return (
-    <main className="page share-page" ref={shareRef}>
+    <main className="page share-page">
       <section className="stats-header">
         <div>
           <div className="hero-kicker">統計</div>
@@ -795,6 +940,30 @@ function StatsPage({ records }) {
         <summary>依賽事名稱統計</summary>
         <GroupTable rows={byEventName} />
       </details>
+
+      {shareImageUrl ? (
+        <div className="share-preview-backdrop" role="dialog" aria-modal="true">
+          <div className="share-preview-card">
+            <div className="share-preview-head">
+              <div>
+                <div className="share-preview-title">統計分享圖已產生</div>
+                <div className="share-preview-text">長按圖片可儲存，或開啟圖片後分享到 LINE。</div>
+              </div>
+              <button type="button" className="share-preview-close" onClick={() => setShareImageUrl("")}>關閉</button>
+            </div>
+            <div className="share-preview-image-wrap">
+              <img src={shareImageUrl} alt="統計分享圖" className="share-preview-image" />
+            </div>
+            <div className="share-preview-actions">
+              <button type="button" className="secondary-button" onClick={openShareImage}>開啟圖片</button>
+              <a className="primary-button small share-download-link" href={shareImageUrl} download={`限時錦標賽統計-${todayString()}.png`}>
+                下載圖片
+              </a>
+            </div>
+            <div className="share-preview-note">iPhone：長按圖片 → 儲存到照片 → 到 LINE 選圖片傳送。</div>
+          </div>
+        </div>
+      ) : null}
     </main>
   );
 }
@@ -912,6 +1081,117 @@ function DataPage({ records, signOut }) {
 }
 
 
+
+function ShareDemoPage() {
+  const sample = {
+    netProfit: 113900,
+    roi: 35.7,
+    totalGames: 64,
+    totalEntries: 68,
+    totalCost: 319400,
+    totalPrize: 433300,
+    totalServiceFee: 21800,
+    avgProfit: 1780,
+  };
+
+  const chartData = [
+    { label: "5/15", value: -9100 },
+    { label: "", value: 12000 },
+    { label: "", value: 18000 },
+    { label: "", value: 16000 },
+    { label: "", value: 21000 },
+    { label: "5/29", value: 39000 },
+    { label: "", value: 48000 },
+    { label: "", value: 52000 },
+    { label: "", value: 61000 },
+    { label: "", value: 70000 },
+    { label: "", value: 75000 },
+    { label: "", value: 93000 },
+    { label: "", value: 88000 },
+    { label: "", value: 104000 },
+    { label: "", value: 115900 },
+    { label: "", value: 98000 },
+    { label: "", value: 106000 },
+    { label: "", value: 101000 },
+    { label: "7/28", value: 113900 },
+  ];
+
+  const width = 900;
+  const height = 260;
+  const pad = 36;
+  const values = chartData.map((i) => i.value);
+  const minValue = Math.min(0, ...values);
+  const maxValue = Math.max(0, ...values);
+  const range = maxValue - minValue || 1;
+  const x = (index) => pad + ((width - pad * 2) * index) / (chartData.length - 1);
+  const y = (value) => height - pad - ((value - minValue) / range) * (height - pad * 2);
+  const points = chartData.map((item, index) => `${x(index)},${y(item.value)}`).join(" ");
+  const zeroY = y(0);
+
+  const lineShareText = encodeURIComponent(`我的限時錦標賽統計：${signedMoney(sample.netProfit)}\n${window.location.href}`);
+
+  return (
+    <main className="share-demo-wrap">
+      <section className="share-demo-card">
+        <div className="share-demo-hero">
+          <div>
+            <div className="app-kicker">LIMITED TOURNAMENT TRACKER</div>
+            <h1>限時錦標賽統計</h1>
+            <p>這是分享頁 Demo。未來玩家按分享後，LINE 聊天室會送出這種連結，朋友點進來就看到完整統計。</p>
+          </div>
+          <div className="share-demo-profit">
+            <span>區間淨利</span>
+            <strong>{signedMoney(sample.netProfit)}</strong>
+            <small>ROI {percent(sample.roi)}</small>
+          </div>
+        </div>
+
+        <div className="share-demo-grid">
+          <StatCard title="總買入" value={money(sample.totalCost)} sub="買入 + 服務費" />
+          <StatCard title="總獎金" value={money(sample.totalPrize)} sub="區間累積獎金" />
+          <StatCard title="服務費" value={money(sample.totalServiceFee)} sub="區間累積服務費" />
+          <StatCard title="平均每場" value={signedMoney(sample.avgProfit)} sub="平均淨利 / 場" />
+          <StatCard title="總場次" value={`${sample.totalGames}`} sub={`Entries ${sample.totalEntries}`} />
+        </div>
+
+        <div className="share-demo-chart-card">
+          <div className="chart-topbar">
+            <div>
+              <div className="card-heading">累積淨利圖</div>
+              <div className="hint">示範區間：全部紀錄</div>
+            </div>
+            <div className="chart-range-badge">5/15 → 7/28</div>
+          </div>
+
+          <svg viewBox={`0 0 ${width} ${height}`} className="share-demo-chart">
+            <line x1={pad} x2={width - pad} y1={zeroY} y2={zeroY} className="axis" />
+            <polyline fill="none" className="line" strokeWidth="7" strokeLinecap="round" strokeLinejoin="round" points={points} />
+            {chartData.map((item, index) => index === 0 || index === chartData.length - 1 || item.value === maxValue ? (
+              <circle key={index} cx={x(index)} cy={y(item.value)} r="8" className="dot" />
+            ) : null)}
+            <text x={pad} y={height - 8} textAnchor="start" className="chart-label axis-label">5/15</text>
+            <text x={width / 2} y={height - 8} textAnchor="middle" className="chart-label axis-label">5/29</text>
+            <text x={width - pad} y={height - 8} textAnchor="end" className="chart-label axis-label">7/28</text>
+          </svg>
+        </div>
+
+        <div className="share-demo-actions">
+          <a className="line-share-link" href={`https://line.me/R/share?text=${lineShareText}`}>
+            用 LINE 分享這個 Demo 連結
+          </a>
+          <a className="share-demo-secondary" href="/">
+            回到記帳工具
+          </a>
+        </div>
+
+        <div className="share-demo-footer">
+          這頁是公開分享頁 Demo，之後可改成每次按分享都產生一組專屬分享連結。
+        </div>
+      </section>
+    </main>
+  );
+}
+
 function LoadingFallback({ message = "載入中...", onReset }) {
   return (
     <main className="loading-wrap">
@@ -930,6 +1210,7 @@ function LoadingFallback({ message = "載入中...", onReset }) {
 }
 
 export default function App() {
+  if (window.location.pathname === "/share-demo") return <ShareDemoPage />;
   const [session, setSession] = useState(null);
   const [records, setRecords] = useState([]);
   const [loading, setLoading] = useState(true);
