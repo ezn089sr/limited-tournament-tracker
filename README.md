@@ -174,3 +174,9 @@ npm run dev
 - 修正 V24 打開白屏問題
 - 補回 LoadingFallback 元件
 - 保留正式分享連結功能與 /share/{token} 公開頁
+
+
+## v26 Share Session Hotfix
+- 修正統計頁按分享時 Can't find variable: session
+- 將 session 從 App 傳入 StatsPage
+- 保留 V25 正式分享連結功能

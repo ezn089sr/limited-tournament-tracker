@@ -845,7 +845,7 @@ function AddPage({ form, setForm, saveRecord, saving, monthSummary }) {
 }
 
 
-function StatsPage({ records }) {
+function StatsPage({ records, session }) {
   const [rangePreset, setRangePreset] = useState("month");
   const [sharing, setSharing] = useState(false);
   const [startDate, setStartDate] = useState(startOfCurrentMonthString());
@@ -1476,5 +1476,5 @@ export default function App() {
     return <LoginPage />;
   }
 
-  return <div className="app-shell"><div className="bg-orb orb-a" /><div className="bg-orb orb-b" /><header className="app-header"><div><div className="app-kicker">Cloud Version</div><h1>限時錦標賽記帳</h1></div><div className={monthSummary.netProfit >= 0 ? "header-profit profit" : "header-profit loss"}>本月 {signedMoney(monthSummary.netProfit)}</div></header>{loading ? <LoadingFallback message="同步資料中..." /> : null}{!loading && tab === "add" ? <AddPage form={form} setForm={setForm} saveRecord={saveRecord} saving={saving} monthSummary={monthSummary} /> : null}{!loading && tab === "stats" ? <StatsPage records={records} /> : null}{!loading && tab === "records" ? <RecordsPage records={records} removeRecord={removeRecord} updateRecord={updateRecord} /> : null}{!loading && tab === "data" ? <DataPage records={records} signOut={signOut} /> : null}<nav className="bottom-nav"><button className={tab === "add" ? "active" : ""} onClick={() => setTab("add")}>＋<span>新增</span></button><button className={tab === "stats" ? "active" : ""} onClick={() => setTab("stats")}>▦<span>統計</span></button><button className={tab === "records" ? "active" : ""} onClick={() => setTab("records")}>≡<span>紀錄</span></button><button className={tab === "data" ? "active" : ""} onClick={() => setTab("data")}>⇅<span>資料</span></button></nav><Toast message={toast} /></div>;
+  return <div className="app-shell"><div className="bg-orb orb-a" /><div className="bg-orb orb-b" /><header className="app-header"><div><div className="app-kicker">Cloud Version</div><h1>限時錦標賽記帳</h1></div><div className={monthSummary.netProfit >= 0 ? "header-profit profit" : "header-profit loss"}>本月 {signedMoney(monthSummary.netProfit)}</div></header>{loading ? <LoadingFallback message="同步資料中..." /> : null}{!loading && tab === "add" ? <AddPage form={form} setForm={setForm} saveRecord={saveRecord} saving={saving} monthSummary={monthSummary} /> : null}{!loading && tab === "stats" ? <StatsPage records={records} session={session} /> : null}{!loading && tab === "records" ? <RecordsPage records={records} removeRecord={removeRecord} updateRecord={updateRecord} /> : null}{!loading && tab === "data" ? <DataPage records={records} signOut={signOut} /> : null}<nav className="bottom-nav"><button className={tab === "add" ? "active" : ""} onClick={() => setTab("add")}>＋<span>新增</span></button><button className={tab === "stats" ? "active" : ""} onClick={() => setTab("stats")}>▦<span>統計</span></button><button className={tab === "records" ? "active" : ""} onClick={() => setTab("records")}>≡<span>紀錄</span></button><button className={tab === "data" ? "active" : ""} onClick={() => setTab("data")}>⇅<span>資料</span></button></nav><Toast message={toast} /></div>;
 }
