@@ -140,6 +140,7 @@ h2{margin:4px 0 0;font-size:20px;line-height:1.18}
 .chart-label{fill:#667085;font-size:12px}
 .chart-label.strong{font-weight:850}
 .axis-label{font-size:11px}
+@media (min-width: 768px){.axis-label{font-size:12px}}
 .svg-profit{fill:#067647;font-size:13px;font-weight:900}
 .svg-loss{fill:#c01048;font-size:13px;font-weight:900}
 .bar-profit{fill:#0ea76c}

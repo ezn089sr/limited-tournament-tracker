@@ -13,10 +13,30 @@ const EVENT_TEMPLATES = {
 };
 const EVENT_OPTIONS = [...Object.keys(EVENT_TEMPLATES), "自訂名稱"];
 
-function todayString() { return new Date().toISOString().slice(0, 10); }
-function startOfCurrentWeekString() { const now = new Date(); const day = now.getDay(); const diff = day === 0 ? 6 : day - 1; const monday = new Date(now); monday.setDate(now.getDate() - diff); return monday.toISOString().slice(0,10); }
-function startOfCurrentMonthString() { const now = new Date(); return new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0,10); }
-function daysAgoString(days) { const d = new Date(); d.setDate(d.getDate() - days); return d.toISOString().slice(0,10); }
+function formatLocalDate(date) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+function todayString() { return formatLocalDate(new Date()); }
+function startOfCurrentWeekString() {
+  const now = new Date();
+  const day = now.getDay();
+  const diff = day === 0 ? 6 : day - 1;
+  const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  monday.setDate(monday.getDate() - diff);
+  return formatLocalDate(monday);
+}
+function startOfCurrentMonthString() {
+  const now = new Date();
+  return formatLocalDate(new Date(now.getFullYear(), now.getMonth(), 1));
+}
+function daysAgoString(days) {
+  const d = new Date();
+  d.setDate(d.getDate() - days);
+  return formatLocalDate(d);
+}
 function toNumber(v, f = 0) { const n = Number(v); return Number.isFinite(n) ? n : f; }
 function money(n) { return toNumber(n).toLocaleString("zh-TW", { maximumFractionDigits: 0 }); }
 function signedMoney(n) { const v = toNumber(n); return `${v >= 0 ? "+" : "-"}${money(Math.abs(v))}`; }
@@ -179,9 +199,12 @@ function CumulativeProfitChart({ data }) {
           {markers.map((marker) => {
             const cx = x(marker.index);
             const cy = y(marker.value);
-            const textY = marker.position === "below" ? Math.min(height - 8, cy + 22) : Math.max(14, cy - 12);
-            const textAnchor = cx > width - 110 ? "end" : cx < 110 ? "start" : "middle";
-            const dx = textAnchor === "end" ? -2 : textAnchor === "start" ? 2 : 0;
+            const forceAbove = marker.position === "below" && cy > height - padding.bottom - 18;
+            const textY = forceAbove || marker.position !== "below"
+              ? Math.max(16, cy - 12)
+              : Math.min(height - 20, cy + 20);
+            const textAnchor = cx > width - 120 ? "end" : cx < 120 ? "start" : "middle";
+            const dx = textAnchor === "end" ? -4 : textAnchor === "start" ? 4 : 0;
             const cls = marker.tone === "profit" ? "svg-profit" : marker.tone === "loss" ? "svg-loss" : "chart-label strong";
             return (
               <g key={`${marker.index}-${marker.text}`}>
