@@ -482,8 +482,10 @@ function DailyProfitChart({ data }) {
   const height = isMobile ? 228 : 240;
   const padding = { top: 20, right: 18, bottom: 34, left: isMobile ? 66 : 62 };
   const values = data.map((i) => i.netProfit);
-  const rawMinValue = Math.min(0, ...values);
-  const rawMaxValue = Math.max(0, ...values);
+  const actualMinValue = Math.min(...values);
+  const actualMaxValue = Math.max(...values);
+  const rawMinValue = Math.min(0, actualMinValue);
+  const rawMaxValue = Math.max(0, actualMaxValue);
   const yTicks = makeYAxisTicks(rawMinValue, rawMaxValue, isMobile ? 4 : 5);
   const minValue = Math.min(...yTicks);
   const maxValue = Math.max(...yTicks);
@@ -501,11 +503,11 @@ function DailyProfitChart({ data }) {
       <div className="chart-summary-row two">
         <div className="chart-summary-pill">
           <div className="chart-summary-label">單日最高</div>
-          <div className="chart-summary-value">{signedMoney(maxValue)}</div>
+          <div className="chart-summary-value">{signedMoney(actualMaxValue)}</div>
         </div>
         <div className="chart-summary-pill">
           <div className="chart-summary-label">單日最低</div>
-          <div className="chart-summary-value">{signedMoney(minValue)}</div>
+          <div className="chart-summary-value">{signedMoney(actualMinValue)}</div>
         </div>
       </div>
 
@@ -814,6 +816,11 @@ function AddPage({ form, setForm, saveRecord, saving, monthSummary }) {
     updateForm("serviceFee", Math.round(base * rate));
   }
 
+  function applyServiceFeeDiscountAmount(amount) {
+    const base = EVENT_TEMPLATES[form.eventName]?.serviceFee ?? toNumber(form.serviceFee);
+    updateForm("serviceFee", Math.max(0, base - amount));
+  }
+
   function changeReentryCount(value) {
     const reentryCount = Math.max(0, Math.floor(toNumber(value)));
     setForm((current) => ({
@@ -864,6 +871,8 @@ function AddPage({ form, setForm, saveRecord, saving, monthSummary }) {
             <QuickRow>
               <QuickButton onClick={() => applyServiceDiscount(0.5)}>折扣 50%</QuickButton>
               <QuickButton onClick={() => applyServiceDiscount(0)}>折扣 100%</QuickButton>
+              <QuickButton onClick={() => applyServiceFeeDiscountAmount(100)}>折 100</QuickButton>
+              <QuickButton onClick={() => applyServiceFeeDiscountAmount(200)}>折 200</QuickButton>
             </QuickRow>
             <Input label="買入服務費" type="number" min="0" value={form.serviceFee} clearZero onChange={(v) => updateForm("serviceFee", v)} />
           </div>
